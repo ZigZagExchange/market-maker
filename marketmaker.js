@@ -114,7 +114,7 @@ async function sendfillrequest(orderreceipt) {
   }
   const tokenRatio = {};
   tokenRatio[baseCurrency] = 1;
-  tokenRatio[quoteCurrency] = price;
+  tokenRatio[quoteCurrency] = parseFloat(price.toPrecision(6));
   const fillOrder = await syncWallet.getOrder({
     tokenSell,
     tokenBuy,
