@@ -98,23 +98,25 @@ async function sendfillrequest(orderreceipt) {
   const quoteCurrency = market.split("-")[1];
   const side = orderreceipt[3];
   let price = orderreceipt[4];
-  const baseQuantity = orderreceipt[5].toString();
-  const quoteQuantity = orderreceipt[6].toString();
+  const baseQuantity = orderreceipt[5].toPrecision(8);
+  const quoteQuantity = orderreceipt[6].toFixed(6);
   let tokenSell, tokenBuy, sellQuantity;
   if (side === "b") {
-    price = price * 0.9999; // Add a margin of error to price
+    price = price * 0.9997; // Add a margin of error to price
     tokenSell = baseCurrency;
     tokenBuy = quoteCurrency;
     sellQuantity = baseQuantity;
   } else if (side === "s") {
-    price = price * 1.0001; // Add a margin of error to price
+    price = price * 1.0003; // Add a margin of error to price
     tokenSell = quoteCurrency;
     tokenBuy = baseCurrency;
     sellQuantity = quoteQuantity;
   }
   const tokenRatio = {};
   tokenRatio[baseCurrency] = 1;
-  tokenRatio[quoteCurrency] = parseFloat(price.toPrecision(6));
+  tokenRatio[quoteCurrency] = parseFloat(price.toFixed(6));
+  console.log(sellQuantity);
+  console.log(tokenRatio);
   const fillOrder = await syncWallet.getOrder({
     tokenSell,
     tokenBuy,
