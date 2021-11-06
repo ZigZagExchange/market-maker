@@ -98,19 +98,19 @@ async function sendfillrequest(orderreceipt) {
   const quoteCurrency = market.split("-")[1];
   const side = orderreceipt[3];
   let price = orderreceipt[4];
-  const baseQuantity = orderreceipt[5].toPrecision(8);
-  const quoteQuantity = orderreceipt[6].toFixed(6);
+  const baseQuantity = orderreceipt[5];
+  const quoteQuantity = orderreceipt[6];
   let tokenSell, tokenBuy, sellQuantity;
   if (side === "b") {
     price = price * 0.9997; // Add a margin of error to price
     tokenSell = baseCurrency;
     tokenBuy = quoteCurrency;
-    sellQuantity = baseQuantity;
+    sellQuantity = baseQuantity.toPrecision(8);
   } else if (side === "s") {
     price = price * 1.0003; // Add a margin of error to price
     tokenSell = quoteCurrency;
     tokenBuy = baseCurrency;
-    sellQuantity = quoteQuantity;
+    sellQuantity = (quoteQuantity * 1.0001).toFixed(6); // Add a margin of error to sellQuantity
   }
   const tokenRatio = {};
   tokenRatio[baseCurrency] = 1;
