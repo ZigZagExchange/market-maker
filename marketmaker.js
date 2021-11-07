@@ -28,8 +28,10 @@ function pingServer() {
 }
 
 async function handleMessage(json) {
-    console.log(json.toString());
     const msg = JSON.parse(json);
+    if (msg.op !== "pong" && msg.op !== "lastprice") {
+        console.log(json.toString());
+    }
     switch(msg.op) {
         case 'pong':
             break
