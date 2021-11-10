@@ -77,8 +77,8 @@ function isOrderFillable(order) {
 
     const spotPrice = spotPrices[market];
     if (!spotPrice) return false;
-    const botAsk = spotPrice * 1.0013;
-    const botBid = spotPrice * 0.9987;
+    const botAsk = spotPrice * 1.001;
+    const botBid = spotPrice * 0.999;
 
     const side = order[3];
     const price = order[4];
