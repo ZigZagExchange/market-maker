@@ -13,12 +13,40 @@ const syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
 const spotPrices = {};
 const openOrders = {};
 
+const CHAIN_ID = 1;
+const MARKET_PAIRS = ["ETH-USDT", "ETH-USDC", "USDC-USDT"];
+const CURRENCY_INFO = {
+    "ETH": { 
+        decimals: 18, 
+        chain: { 
+            1: { tokenId: 0 },
+            1000: { tokenId: 0 },
+        }
+    },
+    "USDC": { 
+        decimals: 6, 
+        chain: { 
+            1: { tokenId: 2 },
+            1000: { tokenId: 2 },
+        }
+    },
+    "USDT": { 
+        decimals: 6, 
+        chain: { 
+            1: { tokenId: 4 },
+            1000: { tokenId: 1 },
+        }
+    },
+}
+
 const zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
 zigzagws.on('open', function open() {
     setInterval(pingServer, 5000);
     setInterval(fillOpenOrders, 10000);
-    const msg = {op:"subscribemarket", args:[1,"ETH-USDT"]};
-    zigzagws.send(JSON.stringify(msg));
+    MARKET_PAIRS.forEach(market => {
+        const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
+        zigzagws.send(JSON.stringify(msg));
+    });
 });
 zigzagws.on('message', handleMessage);
 
@@ -71,7 +99,7 @@ async function handleMessage(json) {
 function isOrderFillable(order) {
     const chainid = order[0];
     const market = order[2];
-    if (chainid != 1 || market != "ETH-USDT") {
+    if (chainid != CHAIN_ID || !MARKET_PAIRS.includes(market)) {
         return false;
     }
 
