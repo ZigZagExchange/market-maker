@@ -133,7 +133,7 @@ async function sendfillrequest(orderreceipt) {
     price = price * 0.9997; // Add a margin of error to price
     tokenSell = baseCurrency;
     tokenBuy = quoteCurrency;
-    sellQuantity = baseQuantity.toPrecision(8);
+    sellQuantity = baseQuantity.toString();
   } else if (side === "s") {
     price = price * 1.0003; // Add a margin of error to price
     tokenSell = quoteCurrency;
