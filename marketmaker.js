@@ -82,8 +82,15 @@ async function handleMessage(json) {
             });
             break
         case "userordermatch":
-            const result = await broadcastfill(msg.args[1], msg.args[2]);
+            const chainid = msg.args[0];
+            const orderid = msg.args[1];
+            const result = await broadcastfill(msg.args[2], msg.args[3]);
             console.log("Swap broadcast result", result);
+            const newstatus = result.success ? 'f' : 'r';
+            const txhash = result.swap.txHash.split(":")[1];
+            const error = result.success ? null : result.swap.error.toString();
+            const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,newstatus,txhash,error]]]}
+            zigzagws.send(JSON.stringify(ordercommitmsg));
             break
         case "cancelorderack":
             const canceled_ids = msg.args[0];
@@ -120,6 +127,7 @@ function isOrderFillable(order) {
 }
 
 async function sendfillrequest(orderreceipt) {
+  const chainId = orderreceipt[0];
   const orderId = orderreceipt[1];
   const market = orderreceipt[2];
   const baseCurrency = market.split("-")[0];
@@ -154,7 +162,7 @@ async function sendfillrequest(orderreceipt) {
     ),
     ratio: zksync.utils.tokenRatio(tokenRatio),
   });
-  const resp = { op: "fillrequest", args: [orderId, fillOrder] };
+  const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
   zigzagws.send(JSON.stringify(resp));
 }
 
