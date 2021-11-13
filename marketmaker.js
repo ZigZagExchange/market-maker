@@ -5,10 +5,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const ethersProvider = ethers.getDefaultProvider(process.env.ETH_NETWORK);
-const syncProvider = await zksync.getDefaultProvider(process.env.ETH_NETWORK);
-const ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY);
-const syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
+let syncWallet, ethersProvider, syncProvider, ethWallet;
+ethersProvider = ethers.getDefaultProvider(process.env.ETH_NETWORK);
+try {
+    syncProvider = await zksync.getDefaultProvider(process.env.ETH_NETWORK);
+    ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY);
+    syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
+} catch (e) {
+    throw new Error("Could not connect to zksync API");
+}
 
 const spotPrices = {};
 const openOrders = {};
@@ -172,17 +177,22 @@ async function sendfillrequest(orderreceipt) {
 }
 
 async function broadcastfill(swapOffer, fillOrder) {
+  console.time('syncswap');
   const swap = await syncWallet.syncSwap({
     orders: [swapOffer, fillOrder],
     feeToken: "ETH",
   });
-  let receipt;
-  try {
-    receipt = await swap.awaitReceipt();
-  } catch (e) {
-    return { success: false, swap, receipt: null };
-  }
-  return { success: true, swap, receipt };
+  //const success = 
+  console.timeEnd('syncswap');
+//  console.time('receipt');
+//  let receipt;
+//  try {
+//    receipt = await swap.awaitReceipt();
+//  } catch (e) {
+//    return { success: false, swap, receipt: null };
+//  }
+//  console.timeEnd('receipt');
+  return { success: true, swap };
 }
 
 async function fillOpenOrders() {
