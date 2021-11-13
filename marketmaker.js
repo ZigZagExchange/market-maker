@@ -174,9 +174,9 @@ async function sendfillrequest(orderreceipt) {
     ),
     ratio: zksync.utils.tokenRatio(tokenRatio),
   }
-  if (signedSinceLastCheck > 0) {
-    orderDetails.nonce = accountState.committed.nonce + signedSinceLastCheck;
-  }
+  //if (signedSinceLastCheck > 0) {
+  //  orderDetails.nonce = accountState.committed.nonce + signedSinceLastCheck;
+  //}
   const fillOrder = await syncWallet.getOrder(orderDetails);
   signedSinceLastCheck++;
   const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
