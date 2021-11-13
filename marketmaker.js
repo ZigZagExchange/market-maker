@@ -184,15 +184,15 @@ async function broadcastfill(swapOffer, fillOrder) {
   });
   //const success = 
   console.timeEnd('syncswap');
-//  console.time('receipt');
-//  let receipt;
-//  try {
-//    receipt = await swap.awaitReceipt();
-//  } catch (e) {
-//    return { success: false, swap, receipt: null };
-//  }
-//  console.timeEnd('receipt');
-  return { success: true, swap };
+  console.time('receipt');
+  let receipt;
+  try {
+    receipt = await swap.awaitReceipt();
+  } catch (e) {
+    return { success: false, swap, receipt: null };
+  }
+  console.timeEnd('receipt');
+  return { success: true, swap, receipt };
 }
 
 async function fillOpenOrders() {
