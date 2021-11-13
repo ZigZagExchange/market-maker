@@ -5,12 +5,21 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let syncWallet, ethersProvider, syncProvider, ethWallet;
+let syncWallet, ethersProvider, syncProvider, ethWallet, accountState;
+let committedSinceLastCheck = 0;
+let signedSinceLastCheck = 0;
 ethersProvider = ethers.getDefaultProvider(process.env.ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(process.env.ETH_NETWORK);
     ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY);
     syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
+    accountState = await syncWallet.getAccountState();
+    console.log(accountState);
+    setInterval(async () => {
+        accountState = await syncWallet.getAccountState()
+        committedSinceLastCheck = 0;
+        signedSinceLastCheck = 0;
+    }, 60000);
 } catch (e) {
     throw new Error("Could not connect to zksync API");
 }
@@ -94,13 +103,7 @@ async function handleMessage(json) {
         case "userordermatch":
             const chainid = msg.args[0];
             const orderid = msg.args[1];
-            const result = await broadcastfill(msg.args[2], msg.args[3]);
-            console.log("Swap broadcast result", result);
-            const newstatus = result.success ? 'f' : 'r';
-            const txhash = result.swap.txHash.split(":")[1];
-            const error = result.success ? null : result.swap.error.toString();
-            const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,newstatus,txhash,error]]]}
-            zigzagws.send(JSON.stringify(ordercommitmsg));
+            const result = await broadcastfill(chainid, orderid, msg.args[2], msg.args[3]);
             break
         case "cancelorderack":
             const canceled_ids = msg.args[0];
@@ -161,9 +164,8 @@ async function sendfillrequest(orderreceipt) {
   const tokenRatio = {};
   tokenRatio[baseCurrency] = 1;
   tokenRatio[quoteCurrency] = parseFloat(price.toFixed(6));
-  console.log(sellQuantity);
-  console.log(tokenRatio);
-  const fillOrder = await syncWallet.getOrder({
+  console.log(`${side} ${baseQuantity} ${baseCurrency} @ ${price}`);
+  const orderDetails = {
     tokenSell,
     tokenBuy,
     amount: syncProvider.tokenSet.parseToken(
@@ -171,29 +173,46 @@ async function sendfillrequest(orderreceipt) {
       sellQuantity
     ),
     ratio: zksync.utils.tokenRatio(tokenRatio),
-  });
+  }
+  if (signedSinceLastCheck > 0) {
+    orderDetails.nonce = accountState.committed.nonce + signedSinceLastCheck;
+  }
+  const fillOrder = await syncWallet.getOrder(orderDetails);
+  signedSinceLastCheck++;
   const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
   zigzagws.send(JSON.stringify(resp));
 }
 
-async function broadcastfill(swapOffer, fillOrder) {
+async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
   const randint = (Math.random()*1000).toFixed(0);
   console.time('syncswap' + randint);
   const swap = await syncWallet.syncSwap({
     orders: [swapOffer, fillOrder],
     feeToken: "ETH",
   });
-  //const success = 
+  committedSinceLastCheck++;
+  const txhash = swap.txHash.split(":")[1];
+  console.log(swap);
+  const txhashmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,'b',txhash]]]}
+  zigzagws.send(JSON.stringify(txhashmsg));
   console.timeEnd('syncswap' + randint);
+
   console.time('receipt' + randint);
-  let receipt;
+  let receipt, success;
   try {
     receipt = await swap.awaitReceipt();
+    if (receipt.success) success = true;
   } catch (e) {
-    return { success: false, swap, receipt: null };
+    receipt = null;
+    success = false;
   }
   console.timeEnd('receipt' + randint);
-  return { success: true, swap, receipt };
+
+  console.log("Swap broadcast result", {swap, receipt});
+  const newstatus = success ? 'f' : 'r';
+  const error = success ? null : swap.error.toString();
+  const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,newstatus,txhash,error]]]}
+  zigzagws.send(JSON.stringify(ordercommitmsg));
 }
 
 async function fillOpenOrders() {
