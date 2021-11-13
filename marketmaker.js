@@ -5,21 +5,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let syncWallet, ethersProvider, syncProvider, ethWallet, accountState;
-let committedSinceLastCheck = 0;
-let signedSinceLastCheck = 0;
+let syncWallet, ethersProvider, syncProvider, ethWallet;
 ethersProvider = ethers.getDefaultProvider(process.env.ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(process.env.ETH_NETWORK);
     ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY);
     syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
-    accountState = await syncWallet.getAccountState();
-    console.log(accountState);
-    setInterval(async () => {
-        accountState = await syncWallet.getAccountState()
-        committedSinceLastCheck = 0;
-        signedSinceLastCheck = 0;
-    }, 60000);
 } catch (e) {
     throw new Error("Could not connect to zksync API");
 }
@@ -174,11 +165,7 @@ async function sendfillrequest(orderreceipt) {
     ),
     ratio: zksync.utils.tokenRatio(tokenRatio),
   }
-  //if (signedSinceLastCheck > 0) {
-  //  orderDetails.nonce = accountState.committed.nonce + signedSinceLastCheck;
-  //}
   const fillOrder = await syncWallet.getOrder(orderDetails);
-  signedSinceLastCheck++;
   const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
   zigzagws.send(JSON.stringify(resp));
 }
@@ -190,7 +177,6 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
     orders: [swapOffer, fillOrder],
     feeToken: "ETH",
   });
-  committedSinceLastCheck++;
   const txhash = swap.txHash.split(":")[1];
   console.log(swap);
   const txhashmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,'b',txhash]]]}
