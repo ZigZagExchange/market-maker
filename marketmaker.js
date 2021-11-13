@@ -177,21 +177,22 @@ async function sendfillrequest(orderreceipt) {
 }
 
 async function broadcastfill(swapOffer, fillOrder) {
-  console.time('syncswap');
+  const randint = (Math.random()*1000).toFixed(0);
+  console.time('syncswap' + randint);
   const swap = await syncWallet.syncSwap({
     orders: [swapOffer, fillOrder],
     feeToken: "ETH",
   });
   //const success = 
-  console.timeEnd('syncswap');
-  console.time('receipt');
+  console.timeEnd('syncswap' + randint);
+  console.time('receipt' + randint);
   let receipt;
   try {
     receipt = await swap.awaitReceipt();
   } catch (e) {
     return { success: false, swap, receipt: null };
   }
-  console.timeEnd('receipt');
+  console.timeEnd('receipt' + randint);
   return { success: true, swap, receipt };
 }
 
