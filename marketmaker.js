@@ -15,10 +15,6 @@ try {
     throw new Error("Could not connect to zksync API");
 }
 
-const accountState = await syncWallet.getAccountState();
-console.log(accountState);
-let currentNonce = accountState.committed.nonce;
-
 const spotPrices = {};
 const openOrders = {};
 
@@ -172,9 +168,7 @@ async function sendfillrequest(orderreceipt) {
       sellQuantity
     ),
     ratio: zksync.utils.tokenRatio(tokenRatio),
-    nonce: ++currentNonce
   });
-  console.log(currentNonce);
   const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
   zigzagws.send(JSON.stringify(resp));
 }
