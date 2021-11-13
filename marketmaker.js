@@ -18,9 +18,6 @@ try {
 const spotPrices = {};
 const openOrders = {};
 
-const broadcastQueue = [];
-processBroadcastQueueLoop(); // Start the loop
-
 const CHAIN_ID = 1;
 const MARKET_PAIRS = ["ETH-USDT", "ETH-USDC", "USDC-USDT"];
 const CURRENCY_INFO = {
@@ -97,7 +94,13 @@ async function handleMessage(json) {
         case "userordermatch":
             const chainid = msg.args[0];
             const orderid = msg.args[1];
-            broadcastQueue.push([chainid, orderid, msg.args[2], msg.args[3]]);
+            const result = await broadcastfill(msg.args[2], msg.args[3]);
+            console.log("Swap broadcast result", result);
+            const newstatus = result.success ? 'f' : 'r';
+            const txhash = result.swap.txHash.split(":")[1];
+            const error = result.success ? null : result.swap.error.toString();
+            const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,newstatus,txhash,error]]]}
+            zigzagws.send(JSON.stringify(ordercommitmsg));
             break
         case "cancelorderack":
             const canceled_ids = msg.args[0];
@@ -173,6 +176,26 @@ async function sendfillrequest(orderreceipt) {
   zigzagws.send(JSON.stringify(resp));
 }
 
+async function broadcastfill(swapOffer, fillOrder) {
+  const randint = (Math.random()*1000).toFixed(0);
+  console.time('syncswap' + randint);
+  const swap = await syncWallet.syncSwap({
+    orders: [swapOffer, fillOrder],
+    feeToken: "ETH",
+  });
+  //const success = 
+  console.timeEnd('syncswap' + randint);
+  console.time('receipt' + randint);
+  let receipt;
+  try {
+    receipt = await swap.awaitReceipt();
+  } catch (e) {
+    return { success: false, swap, receipt: null };
+  }
+  console.timeEnd('receipt' + randint);
+  return { success: true, swap, receipt };
+}
+
 async function fillOpenOrders() {
     for (let orderid in openOrders) {
         const order = openOrders[orderid];
@@ -181,47 +204,4 @@ async function fillOpenOrders() {
             delete openOrders[orderid];
         }
     }
-}
-
-async function processBroadcastQueueLoop() {
-    const row = broadcastQueue.shift();
-    if (row) {
-        const chainid = row[0];
-        const orderid = row[1];
-        const swapOffer = row[2];
-        const fillOrder = row[3];
-
-        const randint = (Math.random()*1000).toFixed(0);
-
-        let receipt, swap;
-        try {
-            console.time('syncswap' + randint);
-            swap = await syncWallet.syncSwap({
-              orders: [swapOffer, fillOrder],
-              feeToken: "ETH",
-            });
-            console.timeEnd('syncswap' + randint);
-
-            console.time('receipt' + randint);
-            receipt = await swap.awaitReceipt();
-            console.timeEnd('receipt' + randint);
-        } catch (e) {
-            console.error(e);
-        }
-        const success = (receipt && receipt.success);
-
-        if (swap) {
-            console.log("Swap broadcast result", swap, receipt);
-            const newstatus = success ? 'f' : 'r';
-            const txhash = swap.txHash.split(":")[1];
-            const error = success ? null : swap.error.toString();
-            const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,newstatus,txhash,error]]]}
-            zigzagws.send(JSON.stringify(ordercommitmsg));
-        }
-        else {
-            console.error("Failed to broadcast order");
-        }
-    }
-
-    setTimeout(processBroadcastQueueLoop, 100);
 }
