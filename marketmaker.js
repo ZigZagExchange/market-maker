@@ -39,7 +39,7 @@ const CURRENCY_INFO = {
     },
 }
 
-const zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
+let zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
 zigzagws.on('open', function open() {
     setInterval(pingServer, 5000);
     setInterval(fillOpenOrders, 10000);
@@ -49,6 +49,11 @@ zigzagws.on('open', function open() {
     });
 });
 zigzagws.on('message', handleMessage);
+zigzagws.on('close', () => {
+    setInterval(() => {
+        zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
+    }, 5000);
+})
 
 function pingServer() {
     const msg = {op:"ping"};
