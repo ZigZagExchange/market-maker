@@ -183,6 +183,7 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
   const swap = await syncWallet.syncSwap({
     orders: [swapOffer, fillOrder],
     feeToken: "ETH",
+    nonce: fillOrder.nonce
   });
   const txhash = swap.txHash.split(":")[1];
   console.log(swap);
