@@ -5,12 +5,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let syncWallet, ethersProvider, syncProvider, ethWallet;
+let syncWallet, ethersProvider, syncProvider, ethWallet, noncesSinceLastCommitment;
 ethersProvider = ethers.getDefaultProvider(process.env.ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(process.env.ETH_NETWORK);
     ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY);
     syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
+    noncesSinceLastCommitment = 0;
 } catch (e) {
     throw new Error("Could not connect to zksync API");
 }
@@ -165,7 +166,13 @@ async function sendfillrequest(orderreceipt) {
     ),
     ratio: zksync.utils.tokenRatio(tokenRatio),
   }
+  if (noncesSinceLastCommitment > 0) {
+      let nonce = await syncWallet.getNonce();
+      nonce += noncesSinceLastCommitment;
+      orderDetails.nonce = nonce;
+  }
   const fillOrder = await syncWallet.getOrder(orderDetails);
+  noncesSinceLastCommitment++;
   const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
   zigzagws.send(JSON.stringify(resp));
 }
@@ -193,6 +200,7 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
     success = false;
   }
   console.timeEnd('receipt' + randint);
+  noncesSinceLastCommitment = 0;
 
   console.log("Swap broadcast result", {swap, receipt});
   const newstatus = success ? 'f' : 'r';
