@@ -5,13 +5,14 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let syncWallet, ethersProvider, syncProvider, ethWallet, noncesSinceLastCommitment;
+let syncWallet, ethersProvider, syncProvider, ethWallet, noncesSinceLastCommitment, lastPongReceived;
 ethersProvider = ethers.getDefaultProvider(process.env.ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(process.env.ETH_NETWORK);
     ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY);
     syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
     noncesSinceLastCommitment = 0;
+    lastPongReceived = Date.now();
 } catch (e) {
     throw new Error("Could not connect to zksync API");
 }
@@ -64,6 +65,9 @@ zigzagws.on('close', () => {
 function pingServer() {
     const msg = {op:"ping"};
     zigzagws.send(JSON.stringify(msg));
+    if (Date.now() - lastPongReceived > 20000) {
+        zigzagws.close();
+    }
 }
 
 async function handleMessage(json) {
@@ -71,6 +75,7 @@ async function handleMessage(json) {
     const msg = JSON.parse(json);
     switch(msg.op) {
         case 'pong':
+            lastPongReceived = Date.now();
             break
         case 'lastprice':
             const prices = msg.args[0];
