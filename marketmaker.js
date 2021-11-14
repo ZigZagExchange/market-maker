@@ -5,7 +5,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let syncWallet, ethersProvider, syncProvider, ethWallet, noncesSinceLastCommitment, lastPongReceived;
+let syncWallet, ethersProvider, syncProvider, ethWallet, noncesSinceLastCommitment, 
+    lastPongReceived, pingServerInterval, fillOrdersInterval;
 ethersProvider = ethers.getDefaultProvider(process.env.ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(process.env.ETH_NETWORK);
@@ -47,25 +48,34 @@ const CURRENCY_INFO = {
 }
 
 let zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
-zigzagws.on('open', function open() {
-    setInterval(pingServer, 5000);
-    setInterval(fillOpenOrders, 10000);
+zigzagws.on('open', onWsOpen);
+
+function onWsOpen() {
+    zigzagws.on('message', handleMessage);
+    zigzagws.on('close', onWsClose);
+    pingServerInterval = setInterval(pingServer, 5000);
+    fillOrdersInterval = setInterval(fillOpenOrders, 10000);
     MARKET_PAIRS.forEach(market => {
         const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
         zigzagws.send(JSON.stringify(msg));
     });
-});
-zigzagws.on('message', handleMessage);
-zigzagws.on('close', () => {
-    setInterval(() => {
+}
+    
+function onWsClose () {
+    console.log("Websocket closed. Restarting");
+    setTimeout(() => {
+        clearInterval(pingServerInterval)
+        clearInterval(fillOrdersInterval)
         zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
+        zigzagws.on('open', onWsOpen);
     }, 5000);
-})
+}
 
 function pingServer() {
     const msg = {op:"ping"};
     zigzagws.send(JSON.stringify(msg));
     if (Date.now() - lastPongReceived > 20000) {
+        console.log("Greater than 20s since last pong");
         zigzagws.close();
     }
 }
