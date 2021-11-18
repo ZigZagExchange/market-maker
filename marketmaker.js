@@ -21,7 +21,7 @@ try {
 const spotPrices = {};
 const openOrders = {};
 
-const CHAIN_ID = 1;
+const CHAIN_ID = process.env.CHAIN_ID;
 const MARKET_PAIRS = ["ETH-USDT", "ETH-USDC", "USDC-USDT"];
 const CURRENCY_INFO = {
     "ETH": { 
