@@ -136,12 +136,12 @@ function isOrderFillable(order) {
     if (!spotPrice) return false;
     let botAsk, botBid;
     if (baseCurrency === "ETH") {
-        botAsk = spotPrice * 1.0007;
-        botBid = spotPrice * 0.9993;
+        botAsk = spotPrice * 1.0005;
+        botBid = spotPrice * 0.9995;
     } 
     else if (baseCurrency === "USDC") {
-        botAsk = spotPrice * 1.0003;
-        botBid = spotPrice * 0.9997;
+        botAsk = spotPrice * 1.0005;
+        botBid = spotPrice * 0.9995;
     }
 
 
