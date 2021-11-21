@@ -202,7 +202,6 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
     nonce: fillOrder.nonce
   });
   const txhash = swap.txHash.split(":")[1];
-  console.log(swap);
   const txhashmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,'b',txhash]]]}
   zigzagws.send(JSON.stringify(txhashmsg));
   console.timeEnd('syncswap' + randint);
