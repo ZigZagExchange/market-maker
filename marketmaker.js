@@ -127,14 +127,23 @@ async function handleMessage(json) {
 function isOrderFillable(order) {
     const chainid = order[0];
     const market = order[2];
+    const baseCurrency = market.split("-")[0];
     if (chainid != CHAIN_ID || !MARKET_PAIRS.includes(market)) {
         return false;
     }
 
     const spotPrice = spotPrices[market];
     if (!spotPrice) return false;
-    const botAsk = spotPrice * 1.0007;
-    const botBid = spotPrice * 0.9993;
+    let botAsk, botBid;
+    if (baseCurrency === "ETH") {
+        botAsk = spotPrice * 1.0007;
+        botBid = spotPrice * 0.9993;
+    } 
+    else if (baseCurrency === "USDC") {
+        botAsk = spotPrice * 1.0003;
+        botBid = spotPrice * 0.9997;
+    }
+
 
     const side = order[3];
     const price = order[4];
