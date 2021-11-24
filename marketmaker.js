@@ -140,8 +140,8 @@ function isOrderFillable(order) {
         botBid = spotPrice * 0.9995;
     } 
     else if (baseCurrency === "USDC") {
-        botAsk = spotPrice * 1.0005;
-        botBid = spotPrice * 0.9995;
+        botAsk = spotPrice * 1.0003;
+        botBid = spotPrice * 0.9997;
     }
 
 
