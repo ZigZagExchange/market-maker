@@ -171,7 +171,12 @@ async function sendfillrequest(orderreceipt) {
     price = price * 0.9997; // Add a margin of error to price
     tokenSell = baseCurrency;
     tokenBuy = quoteCurrency;
-    sellQuantity = baseQuantity.toString();
+    if (tokenSell === "ETH") {
+        sellQuantity = baseQuantity.toString();
+    }
+    else {
+        sellQuantity = parseFloat(baseQuantity.toFixed(6)).toPrecision(8);
+    }
   } else if (side === "s") {
     price = price * 1.0003; // Add a margin of error to price
     tokenSell = quoteCurrency;
