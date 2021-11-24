@@ -176,7 +176,7 @@ async function sendfillrequest(orderreceipt) {
     price = price * 1.0003; // Add a margin of error to price
     tokenSell = quoteCurrency;
     tokenBuy = baseCurrency;
-    sellQuantity = (quoteQuantity * 1.0001).toFixed(6); // Add a margin of error to sellQuantity
+    sellQuantity = parseFloat((quoteQuantity * 1.0001).toFixed(6)).toPrecision(8); // Add a margin of error to sellQuantity, max 6 decimal places, max 8 digits
   }
   const tokenRatio = {};
   tokenRatio[baseCurrency] = 1;
