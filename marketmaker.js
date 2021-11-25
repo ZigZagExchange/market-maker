@@ -175,7 +175,7 @@ async function sendfillrequest(orderreceipt) {
         sellQuantity = baseQuantity.toString();
     }
     else {
-        sellQuantity = parseFloat(baseQuantity.toFixed(6)).toPrecision(8);
+        sellQuantity = parseFloat((baseQuantity * 1.0001).toFixed(6)).toPrecision(6);
     }
   } else if (side === "s") {
     price = price * 1.0003; // Add a margin of error to price
