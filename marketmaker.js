@@ -172,7 +172,7 @@ async function sendfillrequest(orderreceipt) {
     tokenSell = baseCurrency;
     tokenBuy = quoteCurrency;
     if (tokenSell === "ETH") {
-        sellQuantity = baseQuantity.toString();
+        sellQuantity = (baseQuantity * 1.0001).toPrecision(10);
     }
     else {
         sellQuantity = parseFloat((baseQuantity * 1.0001).toFixed(6)).toPrecision(6);
