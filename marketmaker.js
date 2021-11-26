@@ -96,7 +96,7 @@ async function handleMessage(json) {
                 spotPrices[market] = price;
             });
             break
-        case 'openorders':
+        case 'orders':
             const orders = msg.args[0];
             orders.forEach(order => {
                 const orderid = order[1];
