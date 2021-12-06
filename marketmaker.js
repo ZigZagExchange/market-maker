@@ -22,7 +22,7 @@ const spotPrices = {};
 const openOrders = {};
 
 const CHAIN_ID = process.env.CHAIN_ID;
-const MARKET_PAIRS = ["ETH-USDT", "ETH-USDC", "USDC-USDT"];
+const MARKET_PAIRS = ["ETH-USDT", "ETH-USDC", "USDC-USDT", "WBTC-USDT", "ETH-DAI", "FRAX-USDC"];
 const CURRENCY_INFO = {
     "ETH": { 
         decimals: 18, 
@@ -44,6 +44,20 @@ const CURRENCY_INFO = {
             1: { tokenId: 4 },
             1000: { tokenId: 1 },
         }
+    },
+    "DAI": {
+        decimals: 18,
+        chain: {
+            1: { tokenId: 1 },
+            1000: { tokenId: 19 },
+        },
+    },
+    "WBTC": {
+        decimals: 8,
+        chain: {
+            1: { tokenId: 15 },
+            1000: { tokenId: null },
+        },
     },
 }
 
@@ -135,11 +149,11 @@ function isOrderFillable(order) {
     const spotPrice = spotPrices[market];
     if (!spotPrice) return false;
     let botAsk, botBid;
-    if (baseCurrency === "ETH") {
+    if ((["ETH", "WBTC"]).includes(baseCurrency)) {
         botAsk = spotPrice * 1.0005;
         botBid = spotPrice * 0.9995;
     } 
-    else if (baseCurrency === "USDC") {
+    else if ((["USDC", "FRAX", "USDT", "DAI"]).includes(baseCurrency)) {
         botAsk = spotPrice * 1.0003;
         botBid = spotPrice * 0.9997;
     }
