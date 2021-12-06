@@ -188,6 +188,9 @@ async function sendfillrequest(orderreceipt) {
     if (tokenSell === "ETH") {
         sellQuantity = (baseQuantity * 1.0001).toPrecision(10);
     }
+    else if (tokenSell === "WBTC") {
+        sellQuantity = parseFloat((baseQuantity * 1.0001).toFixed(8)).toPrecision(8);
+    }
     else {
         sellQuantity = parseFloat((baseQuantity * 1.0001).toFixed(6)).toPrecision(6);
     }
