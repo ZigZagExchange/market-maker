@@ -254,14 +254,6 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
   const error = success ? null : swap.error.toString();
   const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,newstatus,txhash,error]]]}
   zigzagws.send(JSON.stringify(ordercommitmsg));
-    
-  // re-submit failed orders
-  if (error.includes("Nonce mismatch")) {
-      const submitOrderMsg = { op: "submitorder", args: [chainid, swapOffer] }
-      zigzagws.send(JSON.stringify(submitOrderMsg));
-  }
-  
-
 }
 
 async function fillOpenOrders() {
