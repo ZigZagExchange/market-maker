@@ -6,22 +6,23 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 let syncWallet, ethersProvider, syncProvider, ethWallet, noncesSinceLastCommitment, 
-    lastPongReceived, pingServerInterval, fillOrdersInterval;
+    fillOrdersInterval, accountState;
 ethersProvider = ethers.getDefaultProvider(process.env.ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(process.env.ETH_NETWORK);
     ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY);
     syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
+    accountState = await syncWallet.getAccountState();
     noncesSinceLastCommitment = 0;
-    lastPongReceived = Date.now();
 } catch (e) {
+    console.log(e);
     throw new Error("Could not connect to zksync API");
 }
 
 const spotPrices = {};
 const openOrders = {};
 
-const CHAIN_ID = process.env.CHAIN_ID;
+const CHAIN_ID = parseInt(process.env.CHAIN_ID);
 const MARKET_PAIRS = ["ETH-USDT", "ETH-USDC", "USDC-USDT", "WBTC-USDT", "ETH-DAI", "FRAX-USDC", "DAI-USDC", "DAI-USDT", "WBTC-ETH"];
 const CURRENCY_INFO = {
     "ETH": { 
@@ -67,7 +68,6 @@ zigzagws.on('open', onWsOpen);
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
     zigzagws.on('close', onWsClose);
-    pingServerInterval = setInterval(pingServer, 5000);
     fillOrdersInterval = setInterval(fillOpenOrders, 10000);
     MARKET_PAIRS.forEach(market => {
         const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
@@ -78,7 +78,6 @@ function onWsOpen() {
 function onWsClose () {
     console.log("Websocket closed. Restarting");
     setTimeout(() => {
-        clearInterval(pingServerInterval)
         clearInterval(fillOrdersInterval)
         zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
         zigzagws.on('open', onWsOpen);
@@ -86,22 +85,10 @@ function onWsClose () {
     }, 5000);
 }
 
-function pingServer() {
-    const msg = {op:"ping"};
-    zigzagws.send(JSON.stringify(msg));
-    if (Date.now() - lastPongReceived > 20000) {
-        console.log("Greater than 20s since last pong");
-        zigzagws.close();
-    }
-}
-
 async function handleMessage(json) {
     console.log(json.toString());
     const msg = JSON.parse(json);
     switch(msg.op) {
-        case 'pong':
-            lastPongReceived = Date.now();
-            break
         case 'lastprice':
             const prices = msg.args[0];
             prices.forEach(row => {
@@ -142,6 +129,9 @@ function isOrderFillable(order) {
     const chainid = order[0];
     const market = order[2];
     const baseCurrency = market.split("-")[0];
+    const quoteCurrency = market.split("-")[1];
+    const baseQuantity = order[5];
+    const quoteQuantity = order[6];
     if (chainid != CHAIN_ID || !MARKET_PAIRS.includes(market)) {
         return false;
     }
@@ -161,13 +151,35 @@ function isOrderFillable(order) {
 
     const side = order[3];
     const price = order[4];
-    if (side == 's' && price < botBid) {
-        return true;
+    if (side == 's' && price > botBid) {
+        return false;
     }
-    else if (side == 'b' && price > botAsk) {
-        return true;
+    else if (side == 'b' && price < botAsk) {
+        return false;
     }
-    return false;
+
+    const MIN_DOLLAR_SIZE = process.env.MIN_DOLLAR_SIZE;
+    const MAX_DOLLAR_SIZE = process.env.MAX_DOLLAR_SIZE;
+    let order_dollar_size;
+    if ((["USDC", "FRAX", "USDT", "DAI"]).includes(quoteCurrency)) {
+        order_dollar_size = quoteQuantity;
+    }
+    if ((["ETH", "WBTC"]).includes(quoteCurrency)) {
+        const quoteDollarMarket = baseCurrency + "-USDT";
+        const quotePrice = spotPrices[quoteDollarMarket];
+        order_dollar_size = quoteQuantity * quotePrice;
+    }
+
+    if (order_dollar_size < MIN_DOLLAR_SIZE) {
+        console.log("order too small to fill. Ignoring");
+        return false;
+    }
+    if (order_dollar_size > MAX_DOLLAR_SIZE) { 
+        console.log("order too large to fill. Ignoring");
+        return false;
+    }
+
+    return true;
 }
 
 async function sendfillrequest(orderreceipt) {
