@@ -86,8 +86,8 @@ function onWsClose () {
 }
 
 async function handleMessage(json) {
-    console.log(json.toString());
     const msg = JSON.parse(json);
+    if (msg.op != "lastprice") console.log(json.toString());
     switch(msg.op) {
         case 'lastprice':
             const prices = msg.args[0];
