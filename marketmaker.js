@@ -23,7 +23,7 @@ const spotPrices = {};
 const openOrders = {};
 
 const CHAIN_ID = parseInt(process.env.CHAIN_ID);
-const MARKET_PAIRS = ["ETH-USDT", "ETH-USDC", "USDC-USDT", "WBTC-USDT", "ETH-DAI", "FRAX-USDC", "DAI-USDC", "DAI-USDT", "WBTC-ETH"];
+const MARKET_PAIRS = process.env.PAIR_WHITELIST.split(",")
 const CURRENCY_INFO = {
     "ETH": { 
         decimals: 18, 
