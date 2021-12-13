@@ -24,6 +24,8 @@ const openOrders = {};
 
 const CHAIN_ID = parseInt(process.env.CHAIN_ID);
 const MARKET_PAIRS = process.env.PAIR_WHITELIST.split(",")
+console.log("PAIR WHITELIST: ", process.env.PAIR_WHITELIST);
+
 const CURRENCY_INFO = {
     "ETH": { 
         decimals: 18, 
@@ -221,7 +223,7 @@ async function sendfillrequest(orderreceipt) {
     tokenBuy,
     amount: syncProvider.tokenSet.parseToken(
       tokenSell,
-      sellQuantity
+      sellQuantity.toString()
     ),
     ratio: zksync.utils.tokenRatio(tokenRatio),
   }
