@@ -210,7 +210,12 @@ async function sendfillrequest(orderreceipt) {
   } else if (side === "s") {
     tokenSell = quoteCurrency;
     tokenBuy = baseCurrency;
-    sellQuantity = parseFloat((quoteQuantity * 1.0001).toFixed(6)).toPrecision(8); // Add a margin of error to sellQuantity, max 6 decimal places, max 8 digits
+    if (tokenSell === "WBTC") {
+        sellQuantity = parseFloat((quoteQuantity * 1.0001).toFixed(8)).toPrecision(8);
+    }
+    else {
+        sellQuantity = parseFloat((quoteQuantity * 1.0001).toFixed(6)).toPrecision(8); // Add a margin of error to sellQuantity, max 6 decimal places, max 8 digits
+    }
   }
   sellQuantity = syncProvider.tokenSet.parseToken(
     tokenSell,
