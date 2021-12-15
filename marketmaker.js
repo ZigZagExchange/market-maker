@@ -196,7 +196,6 @@ async function sendfillrequest(orderreceipt) {
   const quoteQuantity = orderreceipt[6];
   let tokenSell, tokenBuy, sellQuantity;
   if (side === "b") {
-    price = price * 0.9997; // Add a margin of error to price
     tokenSell = baseCurrency;
     tokenBuy = quoteCurrency;
     if (tokenSell === "ETH") {
@@ -209,14 +208,13 @@ async function sendfillrequest(orderreceipt) {
         sellQuantity = parseFloat((baseQuantity * 1.0001).toFixed(6)).toPrecision(6);
     }
   } else if (side === "s") {
-    price = price * 1.0003; // Add a margin of error to price
     tokenSell = quoteCurrency;
     tokenBuy = baseCurrency;
     sellQuantity = parseFloat((quoteQuantity * 1.0001).toFixed(6)).toPrecision(8); // Add a margin of error to sellQuantity, max 6 decimal places, max 8 digits
   }
   const tokenRatio = {};
   tokenRatio[baseCurrency] = 1;
-  tokenRatio[quoteCurrency] = parseFloat(price.toFixed(6));
+  tokenRatio[quoteCurrency] = parseFloat(spotPrices[market].toFixed(6));
   console.log(`${side} ${baseQuantity} ${baseCurrency} @ ${price}`);
   const orderDetails = {
     tokenSell,
