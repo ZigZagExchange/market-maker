@@ -212,18 +212,22 @@ async function sendfillrequest(orderreceipt) {
     tokenBuy = baseCurrency;
     sellQuantity = parseFloat((quoteQuantity * 1.0001).toFixed(6)).toPrecision(8); // Add a margin of error to sellQuantity, max 6 decimal places, max 8 digits
   }
+  sellQuantity = syncProvider.tokenSet.parseToken(
+    tokenSell,
+    sellQuantity.toString()
+  );
+  sellQuantity = zksync.utils.closestPackableTransactionAmount(sellQuantity);
   const tokenRatio = {};
   tokenRatio[baseCurrency] = 1;
   tokenRatio[quoteCurrency] = parseFloat(spotPrices[market].toFixed(6));
   console.log(`${side} ${baseQuantity} ${baseCurrency} @ ${price}`);
+  const one_min_expiry = (Date.now() / 1000 | 0) + 60;
   const orderDetails = {
     tokenSell,
     tokenBuy,
-    amount: syncProvider.tokenSet.parseToken(
-      tokenSell,
-      sellQuantity.toString()
-    ),
+    amount: sellQuantity,
     ratio: zksync.utils.tokenRatio(tokenRatio),
+    validUntil: one_min_expiry
   }
   if (noncesSinceLastCommitment > 0) {
       let nonce = await syncWallet.getNonce();
