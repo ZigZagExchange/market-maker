@@ -103,10 +103,11 @@ async function handleMessage(json) {
             const orders = msg.args[0];
             orders.forEach(order => {
                 const orderid = order[1];
-                if (isOrderFillable(order)) {
+                const fillable = isOrderFillable(order);
+                if (fillable.fillable) {
                     sendfillrequest(order);
                 }
-                else {
+                else if (fillable.error === "badprice") {
                     openOrders[orderid] = order;
                 }
             });
@@ -134,8 +135,14 @@ function isOrderFillable(order) {
     const quoteCurrency = market.split("-")[1];
     const baseQuantity = order[5];
     const quoteQuantity = order[6];
+    const expires = order[7];
+    const now = Date.now() / 1000 | 0;
     if (chainid != CHAIN_ID || !MARKET_PAIRS.includes(market)) {
-        return false;
+        return { fillable: false, reason: "unsupported", code: 1 };
+    }
+
+    if (now > expires) {
+        return { fillable: false, reason: "expired", code: 2 };
     }
 
     const spotPrice = spotPrices[market];
@@ -154,10 +161,10 @@ function isOrderFillable(order) {
     const side = order[3];
     const price = order[4];
     if (side == 's' && price > botBid) {
-        return false;
+        return { fillable: false, reason: "badprice", code: 3 };
     }
     else if (side == 'b' && price < botAsk) {
-        return false;
+        return { fillable: false, reason: "badprice", code: 3 };
     }
 
     const MIN_DOLLAR_SIZE = process.env.MIN_DOLLAR_SIZE;
@@ -174,14 +181,14 @@ function isOrderFillable(order) {
 
     if (order_dollar_size < MIN_DOLLAR_SIZE) {
         console.log("order too small to fill. Ignoring");
-        return false;
+        return { fillable: false, reason: "badsize", code: 4 };
     }
     if (order_dollar_size > MAX_DOLLAR_SIZE) { 
         console.log("order too large to fill. Ignoring");
-        return false;
+        return { fillable: false, reason: "badsize", code: 4 };
     }
 
-    return true;
+    return { fillable: true, reason: null, code: 0 };
 }
 
 async function sendfillrequest(orderreceipt) {
@@ -280,8 +287,12 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
 async function fillOpenOrders() {
     for (let orderid in openOrders) {
         const order = openOrders[orderid];
-        if (isOrderFillable(order)) {
+        const fillable = isOrderFillable(order);
+        if (fillable.fillable) {
             sendfillrequest(order);
+            delete openOrders[orderid];
+        }
+        else if (fillable.error !== "badprice") {
             delete openOrders[orderid];
         }
     }
