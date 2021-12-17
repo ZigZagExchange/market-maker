@@ -148,7 +148,7 @@ function isOrderFillable(order) {
     const spotPrice = spotPrices[market];
     if (!spotPrice) return false;
     let botAsk, botBid;
-    if ((["ETH", "WBTC"]).includes(baseCurrency)) {
+    if ((["ETH", "WBTC", "WETH"]).includes(baseCurrency)) {
         botAsk = spotPrice * 1.0005;
         botBid = spotPrice * 0.9995;
     } 
@@ -173,7 +173,7 @@ function isOrderFillable(order) {
     if ((["USDC", "FRAX", "USDT", "DAI"]).includes(quoteCurrency)) {
         order_dollar_size = quoteQuantity;
     }
-    if ((["ETH", "WBTC"]).includes(quoteCurrency)) {
+    if ((["ETH", "WBTC", "WETH"]).includes(quoteCurrency)) {
         const quoteDollarMarket = baseCurrency + "-USDT";
         const quotePrice = spotPrices[quoteDollarMarket];
         order_dollar_size = quoteQuantity * quotePrice;
