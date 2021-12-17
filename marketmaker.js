@@ -320,6 +320,11 @@ async function processFillQueue() {
         return false;
     }
     const order = FILL_QUEUE.shift();
-    await sendfillrequest(order);
-    setTimeout(processFillQueue, 100);
+    try {
+        await sendfillrequest(order);
+    } catch (e) {
+        console.error(e);
+        ORDER_BROADCASTING = false;
+    }
+    setTimeout(processFillQueue, 50);
 }
