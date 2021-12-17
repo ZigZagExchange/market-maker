@@ -12,6 +12,14 @@ try {
     syncProvider = await zksync.getDefaultProvider(process.env.ETH_NETWORK);
     ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY);
     syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
+    if (!(await syncWallet.isSigningKeySet())) {
+        console.log("setting sign key");
+        const signKeyResult = await syncWallet.setSigningKey({
+            feeToken: "ETH",
+            ethAuthType: "ECDSA",
+        });
+        console.log(signKeyResult);
+    }
     accountState = await syncWallet.getAccountState();
     noncesSinceLastCommitment = 0;
 } catch (e) {
