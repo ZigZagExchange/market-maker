@@ -5,7 +5,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let syncWallet, ethersProvider, syncProvider, ethWallet, noncesSinceLastCommitment, 
+// Initiate fill loop
+let ORDER_BROADCASTING = false;
+const FILL_QUEUE = [];
+setTimeout(processFillQueue, 1000);
+
+let syncWallet, ethersProvider, syncProvider, ethWallet, 
     fillOrdersInterval, accountState;
 ethersProvider = ethers.getDefaultProvider(process.env.ETH_NETWORK);
 try {
@@ -21,14 +26,13 @@ try {
         console.log(signKeyResult);
     }
     accountState = await syncWallet.getAccountState();
-    noncesSinceLastCommitment = 0;
 } catch (e) {
     console.log(e);
     throw new Error("Could not connect to zksync API");
 }
 
 const spotPrices = {};
-const openOrders = {};
+const OPEN_ORDERS = {};
 
 const CHAIN_ID = parseInt(process.env.CHAIN_ID);
 const MARKET_PAIRS = process.env.PAIR_WHITELIST.split(",")
@@ -87,6 +91,7 @@ function onWsOpen() {
     
 function onWsClose () {
     console.log("Websocket closed. Restarting");
+    ORDER_BROADCASTING = false;
     setTimeout(() => {
         clearInterval(fillOrdersInterval)
         zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
@@ -99,6 +104,9 @@ async function handleMessage(json) {
     const msg = JSON.parse(json);
     if (msg.op != "lastprice") console.log(json.toString());
     switch(msg.op) {
+        case 'error':
+            ORDER_BROADCASTING = false;
+            break;
         case 'lastprice':
             const prices = msg.args[0];
             prices.forEach(row => {
@@ -113,23 +121,22 @@ async function handleMessage(json) {
                 const orderid = order[1];
                 const fillable = isOrderFillable(order);
                 if (fillable.fillable) {
-                    sendfillrequest(order);
+                    FILL_QUEUE.push(order);
                 }
                 else if (fillable.error === "badprice") {
-                    openOrders[orderid] = order;
+                    OPEN_ORDERS[orderid] = order;
                 }
             });
             break
         case "userordermatch":
             const chainid = msg.args[0];
             const orderid = msg.args[1];
-            const result = await broadcastfill(chainid, orderid, msg.args[2], msg.args[3]);
-            break
-        case "cancelorderack":
-            const canceled_ids = msg.args[0];
-            canceled_ids.forEach(orderid => {
-                delete openOrders[orderid]
-            });
+            try {
+                await broadcastfill(chainid, orderid, msg.args[2], msg.args[3]);
+            } catch (e) {
+                console.error(e);
+            }
+            ORDER_BROADCASTING = false;
             break
         default:
             break
@@ -249,13 +256,11 @@ async function sendfillrequest(orderreceipt) {
     ratio: zksync.utils.tokenRatio(tokenRatio),
     validUntil: one_min_expiry
   }
-  if (noncesSinceLastCommitment > 0) {
-      let nonce = await syncWallet.getNonce();
-      nonce += noncesSinceLastCommitment;
-      orderDetails.nonce = nonce;
-  }
   const fillOrder = await syncWallet.getOrder(orderDetails);
-  noncesSinceLastCommitment++;
+    
+  // Set global flag 
+  ORDER_BROADCASTING = true;
+
   const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
   zigzagws.send(JSON.stringify(resp));
 }
@@ -283,7 +288,6 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
     success = false;
   }
   console.timeEnd('receipt' + randint);
-  noncesSinceLastCommitment = 0;
 
   console.log("Swap broadcast result", {swap, receipt});
   const newstatus = success ? 'f' : 'r';
@@ -293,15 +297,29 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
 }
 
 async function fillOpenOrders() {
-    for (let orderid in openOrders) {
-        const order = openOrders[orderid];
+    for (let orderid in OPEN_ORDERS) {
+        const order = OPEN_ORDERS[orderid];
         const fillable = isOrderFillable(order);
         if (fillable.fillable) {
-            sendfillrequest(order);
-            delete openOrders[orderid];
+            FILL_QUEUE.push(order);
+            delete OPEN_ORDERS[orderid];
         }
         else if (fillable.error !== "badprice") {
-            delete openOrders[orderid];
+            delete OPEN_ORDERS[orderid];
         }
     }
+}
+
+async function processFillQueue() {
+    if (ORDER_BROADCASTING) {
+        setTimeout(processFillQueue, 100);
+        return false;
+    }
+    if (FILL_QUEUE.length === 0) {
+        setTimeout(processFillQueue, 100);
+        return false;
+    }
+    const order = FILL_QUEUE.shift();
+    await sendfillrequest(order);
+    setTimeout(processFillQueue, 100);
 }
