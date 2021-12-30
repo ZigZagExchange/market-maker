@@ -94,7 +94,7 @@ zigzagws.on('open', onWsOpen);
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
     zigzagws.on('close', onWsClose);
-    fillOrdersInterval = setInterval(fillOpenOrders, 10000);
+    fillOrdersInterval = setInterval(fillOpenOrders, 5000);
     MARKET_PAIRS.forEach(market => {
         const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
         zigzagws.send(JSON.stringify(msg));
@@ -135,7 +135,7 @@ async function handleMessage(json) {
                 if (fillable.fillable) {
                     FILL_QUEUE.push(order);
                 }
-                else if (fillable.error === "badprice") {
+                else if (fillable.reason === "badprice") {
                     OPEN_ORDERS[orderid] = order;
                 }
             });
@@ -337,6 +337,7 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
 }
 
 async function fillOpenOrders() {
+    console.log("filling open orders");
     for (let orderid in OPEN_ORDERS) {
         const order = OPEN_ORDERS[orderid];
         const fillable = isOrderFillable(order);
@@ -344,7 +345,7 @@ async function fillOpenOrders() {
             FILL_QUEUE.push(order);
             delete OPEN_ORDERS[orderid];
         }
-        else if (fillable.error !== "badprice") {
+        else if (fillable.reason !== "badprice") {
             delete OPEN_ORDERS[orderid];
         }
     }
