@@ -44,21 +44,31 @@ const CURRENCY_INFO = {
         chain: { 
             1: { tokenId: 0 },
             1000: { tokenId: 0 },
-        }
+        },
+        gasFee: 0.0003,
+    },
+    "WETH": { 
+        decimals: 18, 
+        chain: { 
+            1: { tokenId: 61 },
+        },
+        gasFee: 0.0003,
     },
     "USDC": { 
         decimals: 6, 
         chain: { 
             1: { tokenId: 2 },
             1000: { tokenId: 2 },
-        }
+        },
+        gasFee: 1,
     },
     "USDT": { 
         decimals: 6, 
         chain: { 
             1: { tokenId: 4 },
             1000: { tokenId: 1 },
-        }
+        },
+        gasFee: 1,
     },
     "DAI": {
         decimals: 18,
@@ -66,6 +76,7 @@ const CURRENCY_INFO = {
             1: { tokenId: 1 },
             1000: { tokenId: 19 },
         },
+        gasFee: 1,
     },
     "WBTC": {
         decimals: 8,
@@ -73,6 +84,7 @@ const CURRENCY_INFO = {
             1: { tokenId: 15 },
             1000: { tokenId: null },
         },
+        gasFee: 0.00003,
     },
 }
 
@@ -120,6 +132,7 @@ async function handleMessage(json) {
             orders.forEach(order => {
                 const orderid = order[1];
                 const fillable = isOrderFillable(order);
+                console.log(fillable);
                 if (fillable.fillable) {
                     FILL_QUEUE.push(order);
                 }
@@ -151,6 +164,8 @@ function isOrderFillable(order) {
     const baseQuantity = order[5];
     const quoteQuantity = order[6];
     const expires = order[7];
+    const side = order[3];
+    const price = order[4];
     const now = Date.now() / 1000 | 0;
     if (chainid != CHAIN_ID || !MARKET_PAIRS.includes(market)) {
         return { fillable: false, reason: "unsupported", code: 1 };
@@ -160,25 +175,17 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "expired", code: 2 };
     }
 
-    const spotPrice = spotPrices[market];
-    if (!spotPrice) return false;
-    let botAsk, botBid;
-    if ((["ETH", "WBTC", "WETH"]).includes(baseCurrency)) {
-        botAsk = spotPrice * 1.0005;
-        botBid = spotPrice * 0.9995;
-    } 
-    else if ((["USDC", "FRAX", "USDT", "DAI"]).includes(baseCurrency)) {
-        botAsk = spotPrice * 1.0003;
-        botBid = spotPrice * 0.9997;
+    let quote;
+    try {
+        quote = genquote(chainid, market, side, baseQuantity, quoteQuantity);
+    } catch (e) {
+        return { fillable: false, reason: e.message, code: 5 }
     }
 
-
-    const side = order[3];
-    const price = order[4];
-    if (side == 's' && price > botBid) {
+    if (side == 's' && price > quote.hardPrice) {
         return { fillable: false, reason: "badprice", code: 3 };
     }
-    else if (side == 'b' && price < botAsk) {
+    else if (side == 'b' && price < quote.hardPrice) {
         return { fillable: false, reason: "badprice", code: 3 };
     }
 
@@ -204,6 +211,40 @@ function isOrderFillable(order) {
     }
 
     return { fillable: true, reason: null, code: 0 };
+}
+
+function genquote(chainid, market, side, baseQuantity) {
+    if (CHAIN_ID !== chainid) throw new Error("Invalid chain");
+    if (!MARKET_PAIRS.includes(market)) throw new Error("Invalid market");
+    if (!(['b','s']).includes(side)) throw new Error("Invalid side");
+    if (baseQuantity <= 0) throw new Error("Quantity must be positive");
+
+    const lastPrice = spotPrices[market];
+    let SOFT_SPREAD, HARD_SPREAD;
+    const baseCurrency = market.split("-")[0];
+    const quoteCurrency = market.split("-")[1];
+    if ((["USDC", "USDT", "FRAX", "DAI"]).includes(baseCurrency)) {
+        SOFT_SPREAD = 0.0006;
+        HARD_SPREAD = 0.0003;
+    }
+    else {
+        SOFT_SPREAD = 0.001;
+        HARD_SPREAD = 0.0005;
+    }
+    let softQuoteQuantity, hardQuoteQuantity;
+    if (baseQuantity && side === 'b') {
+        softQuoteQuantity = (baseQuantity * lastPrice * (1 + SOFT_SPREAD)) + CURRENCY_INFO[quoteCurrency].gasFee;
+        hardQuoteQuantity = (baseQuantity * lastPrice * (1 + HARD_SPREAD)) + CURRENCY_INFO[quoteCurrency].gasFee;
+    }
+    else if (baseQuantity && side === 's') {
+        softQuoteQuantity = (baseQuantity - CURRENCY_INFO[baseCurrency].gasFee) * lastPrice * (1 - SOFT_SPREAD);
+        hardQuoteQuantity = (baseQuantity - CURRENCY_INFO[baseCurrency].gasFee) * lastPrice * (1 - HARD_SPREAD);
+    }
+    const softPrice = (softQuoteQuantity / baseQuantity).toPrecision(6);
+    const hardPrice = (hardQuoteQuantity / baseQuantity).toPrecision(6);;
+    if (softPrice < 0  || hardPrice < 0) throw new Error("Amount is inadequate to pay fee");
+    if (isNaN(softPrice)  || isNaN(hardPrice)) throw new Error("Internal Error. No price generated.");
+    return { softPrice, hardPrice, softQuoteQuantity, hardQuoteQuantity };
 }
 
 async function sendfillrequest(orderreceipt) {
