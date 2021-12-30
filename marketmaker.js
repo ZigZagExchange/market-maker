@@ -337,7 +337,6 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
 }
 
 async function fillOpenOrders() {
-    console.log("filling open orders");
     for (let orderid in OPEN_ORDERS) {
         const order = OPEN_ORDERS[orderid];
         const fillable = isOrderFillable(order);
