@@ -86,6 +86,14 @@ const CURRENCY_INFO = {
         },
         gasFee: 0.00003,
     },
+    "FRAX": {
+        decimals: 18,
+        chain: {
+            1: { tokenId: 92 },
+            1000: { tokenId: null },
+        },
+        gasFee: 1,
+    },
 }
 
 let zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
