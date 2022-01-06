@@ -16,8 +16,14 @@ else {
     const mmConfigFile = fs.readFileSync("config.json", "utf8");
     MM_CONFIG = JSON.parse(mmConfigFile);
 }
-console.log(MM_CONFIG);
-const activePairs = Object.keys(MM_CONFIG.pairs).join(',');
+let activePairs = [];
+for (let marketId in MM_CONFIG.pairs) {
+    const pair = MM_CONFIG.pairs[marketId];
+    if (pair.active) {
+        activePairs.push(marketId);
+    }
+}
+console.log("ACTIVE PAIRS", activePairs);
 
 // Initiate fill loop
 let ORDER_BROADCASTING = false;
@@ -32,7 +38,7 @@ let syncWallet, ethersProvider, syncProvider, ethWallet,
 ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
-    ethWallet = new ethers.Wallet(MM_CONFIG.ethPrivKey);
+    ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey);
     syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
     if (!(await syncWallet.isSigningKeySet())) {
         console.log("setting sign key");
@@ -52,9 +58,13 @@ const SPOT_PRICES = {};
 const OPEN_ORDERS = {};
 
 // Get markets info
-const markets_url = `https://zigzag-markets.herokuapp.com/markets?chainid=${CHAIN_ID}&id=${activePairs}`
+const activePairsText = activePairs.join(',');
+const markets_url = `https://zigzag-markets.herokuapp.com/markets?chainid=${CHAIN_ID}&id=${activePairsText}`
 const markets = await fetch(markets_url).then(r => r.json());
-console.log(markets);
+if (markets.error) {
+    console.error(markets);
+    throw new Error(markets.error);
+}
 const MARKETS = {};
 for (let i in markets) {
     const market = markets[i];
@@ -72,8 +82,10 @@ function onWsOpen() {
     zigzagws.on('close', onWsClose);
     fillOrdersInterval = setInterval(fillOpenOrders, 5000);
     for (let market in MM_CONFIG.pairs) {
-        const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
-        zigzagws.send(JSON.stringify(msg));
+        if (MM_CONFIG.pairs[market].active) {
+            const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
+            zigzagws.send(JSON.stringify(msg));
+        }
     }
 }
     
@@ -139,6 +151,7 @@ function isOrderFillable(order) {
     const mmConfig = MM_CONFIG.pairs[market_id];
     if (chainid != CHAIN_ID) return { fillable: false, reason: "badchain" }
     if (!market) return { fillable: false, reason: "badmarket" }
+    if (!mmConfig.active) return { fillable: false, reason: "inactivemarket" }
 
     const baseQuantity = order[5];
     const quoteQuantity = order[6];
@@ -164,10 +177,10 @@ function isOrderFillable(order) {
         return { fillable: false, reason: e.message }
     }
 
-    if (side == 's' && price > quote.hardPrice) {
+    if (side == 's' && price > quote.quotePrice) {
         return { fillable: false, reason: "badprice" };
     }
-    else if (side == 'b' && price < quote.hardPrice) {
+    else if (side == 'b' && price < quote.quotePrice) {
         return { fillable: false, reason: "badprice" };
     }
 
@@ -205,34 +218,37 @@ async function sendfillrequest(orderreceipt) {
   const baseCurrency = market.baseAssetId;
   const quoteCurrency = market.quoteAssetId;
   const side = orderreceipt[3];
-  let price = orderreceipt[4];
   const baseQuantity = orderreceipt[5];
   const quoteQuantity = orderreceipt[6];
-  let tokenSell, tokenBuy, sellQuantity;
+  const quote = genquote(chainId, market_id, side, baseQuantity);
+  let tokenSell, tokenBuy, sellQuantity, buyQuantity;
   if (side === "b") {
     tokenSell = market.baseAssetId;
     tokenBuy = market.quoteAssetId;
-    sellQuantity = baseQuantity.toFixed(market.baseAsset.decimals);
+    // Add 1 bip to to protect against rounding errors
+    sellQuantity = (baseQuantity * 1.0001).toFixed(market.baseAsset.decimals);
+    buyQuantity = quote.quoteQuantity.toFixed(market.quoteAsset.decimals);
   } else if (side === "s") {
     tokenSell = market.quoteAssetId;
     tokenBuy = market.baseAssetId;
-    sellQuantity = quoteQuantity.toFixed(market.quoteAsset.decimals);
+    // Add 1 bip to to protect against rounding errors
+    sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
+    buyQuantity = baseQuantity.toFixed(market.baseAsset.decimals);
   }
-  sellQuantity = syncProvider.tokenSet.parseToken(
+  const sellQuantityParsed = syncProvider.tokenSet.parseToken(
     tokenSell,
     sellQuantity
   );
-  sellQuantity = zksync.utils.closestPackableTransactionAmount(sellQuantity);
+  const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(sellQuantityParsed);
   const tokenRatio = {};
-  tokenRatio[baseCurrency] = baseQuantity.toFixed(market.baseAsset.decimals);
-  tokenRatio[quoteCurrency] = quoteQuantity.toFixed(market.quoteAsset.decimals);
+  tokenRatio[tokenBuy] = buyQuantity;
+  tokenRatio[tokenSell] = sellQuantity;
   console.log(tokenRatio);
-  console.log(sellQuantity.toString());
   const one_min_expiry = (Date.now() / 1000 | 0) + 60;
   const orderDetails = {
     tokenSell,
     tokenBuy,
-    amount: sellQuantity,
+    amount: sellQuantityPacked,
     ratio: zksync.utils.tokenRatio(tokenRatio),
     validUntil: one_min_expiry
   }
