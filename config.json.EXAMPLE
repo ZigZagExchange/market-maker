@@ -1,0 +1,16 @@
+{
+    "eth_privkey": "aaaaaaaaaa.......",
+    "zigzag_chain_id": 1000,
+    "zigzag_ws_url": "wss://zigzag-exchange.herokuapp.com",
+    "pairs": {
+        "ETH-USDC": {
+            "priceFeedPrimary": "cryptowatch:6631",
+            "priceFeedSecondary": null,
+            "slippageRate": 1e-9,
+            "active": true,
+            "maxSize": 100,
+            "minSize": 0.0003,
+            "minSpread": 0.0005
+        }
+    }
+}
