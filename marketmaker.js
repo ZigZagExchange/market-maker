@@ -116,7 +116,6 @@ async function handleMessage(json) {
             orders.forEach(order => {
                 const orderid = order[1];
                 const fillable = isOrderFillable(order);
-                console.log(fillable);
                 if (fillable.fillable) {
                     FILL_QUEUE.push(order);
                 }
@@ -261,7 +260,6 @@ async function sendfillrequest(orderreceipt) {
   const tokenRatio = {};
   tokenRatio[tokenBuy] = buyQuantity;
   tokenRatio[tokenSell] = sellQuantity;
-  console.log(tokenRatio);
   const one_min_expiry = (Date.now() / 1000 | 0) + 60;
   const orderDetails = {
     tokenSell,
@@ -365,7 +363,8 @@ async function cryptowatchWsSetup() {
           }
         })
     }
-    let cryptowatch_ws = new WebSocket("wss://stream.cryptowat.ch/connect?apikey=" + process.env.CRYPTOWATCH_API_KEY);
+    const cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
+    let cryptowatch_ws = new WebSocket("wss://stream.cryptowat.ch/connect?apikey=" + cryptowatchApiKey);
     cryptowatch_ws.on('open', onopen);
     cryptowatch_ws.on('message', onmessage);
     cryptowatch_ws.on('close', onclose);
