@@ -1,11 +1,11 @@
 {
-    "ethPrivKey": "aaaa....",
+    "ethPrivKey": "ccccxxxx....",
     "zigzagChainId": 1000,
     "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
     "pairs": {
         "ETH-USDC": {
             "priceFeedPrimary": "cryptowatch:6631",
-            "priceFeedSecondary": null,
+            "priceFeedSecondary": "cryptowatch:588",
             "slippageRate": 1e-5,
             "active": true,
             "maxSize": 100,
@@ -15,7 +15,7 @@
         },
         "ETH-USDT": {
             "priceFeedPrimary": "cryptowatch:588",
-            "priceFeedSecondary": null,
+            "priceFeedSecondary": "cryptowatch:6631",
             "slippageRate": 1e-5,
             "active": true,
             "maxSize": 100,
@@ -25,7 +25,7 @@
         },
         "ETH-DAI": {
             "priceFeedPrimary": "cryptowatch:63533",
-            "priceFeedSecondary": null,
+            "priceFeedSecondary": "cryptowatch:588",
             "slippageRate": 1e-5,
             "active": true,
             "maxSize": 100,
@@ -35,7 +35,7 @@
         },
         "ETH-FRAX": {
             "priceFeedPrimary": "cryptowatch:6631",
-            "priceFeedSecondary": null,
+            "priceFeedSecondary": "cryptowatch:588",
             "slippageRate": 1e-5,
             "active": true,
             "maxSize": 100,

@@ -7,6 +7,10 @@ import fs from 'fs';
 
 dotenv.config();
 
+// Globals
+const PRICE_FEEDS = {};
+const OPEN_ORDERS = {};
+
 // Load MM config
 let MM_CONFIG;
 if (process.env.MM_CONFIG) {
@@ -24,6 +28,9 @@ for (let marketId in MM_CONFIG.pairs) {
     }
 }
 console.log("ACTIVE PAIRS", activePairs);
+
+// Start price feeds
+cryptowatchWsSetup();
 
 // Initiate fill loop
 let ORDER_BROADCASTING = false;
@@ -53,9 +60,6 @@ try {
     console.log(e);
     throw new Error("Could not connect to zksync API");
 }
-
-const SPOT_PRICES = {};
-const OPEN_ORDERS = {};
 
 // Get markets info
 const activePairsText = activePairs.join(',');
@@ -107,14 +111,6 @@ async function handleMessage(json) {
         case 'error':
             ORDER_BROADCASTING = false;
             break;
-        case 'lastprice':
-            const prices = msg.args[0];
-            prices.forEach(row => {
-                const market = row[0];
-                const price = row[1];
-                SPOT_PRICES[market] = price;
-            });
-            break
         case 'orders':
             const orders = msg.args[0];
             orders.forEach(order => {
@@ -194,20 +190,42 @@ function genquote(chainid, market_id, side, baseQuantity) {
     if (!(['b','s']).includes(side)) throw new Error("badside");
     if (baseQuantity <= 0) throw new Error("badquantity");
 
+    validatePriceFeed(market_id);
+
     const mmConfig = MM_CONFIG.pairs[market_id];
-    const lastPrice = SPOT_PRICES[market_id];
+    const primaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedPrimary;
+    const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
     const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
     let quoteQuantity;
     if (side === 'b') {
-        quoteQuantity = (baseQuantity * lastPrice * (1 + SPREAD)) + market.quoteFee;
+        quoteQuantity = (baseQuantity * primaryPrice * (1 + SPREAD)) + market.quoteFee;
     }
     else if (side === 's') {
-        quoteQuantity = (baseQuantity - market.baseFee) * lastPrice * (1 - SPREAD);
+        quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
     }
     const quotePrice = (quoteQuantity / baseQuantity).toPrecision(6);
     if (quotePrice < 0) throw new Error("Amount is inadequate to pay fee");
     if (isNaN(quotePrice)) throw new Error("Internal Error. No price generated.");
     return { quotePrice, quoteQuantity };
+}
+
+function validatePriceFeed(market_id) {
+    const mmConfig = MM_CONFIG.pairs[market_id];
+    const primaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedPrimary;
+    const secondaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedSecondary;
+    
+    // If there is no secondary price feed, the price auto-validates
+    if (!secondaryPriceFeedId) return true;
+
+    // If the secondary price feed varies from the primary price feed by more than 1%, assume something is broken
+    const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
+    const secondaryPrice = PRICE_FEEDS[secondaryPriceFeedId];
+    const percentDiff = Math.abs(primaryPrice - secondaryPrice) / primaryPrice;
+    if (percentDiff > 0.01) {
+        throw new Error("Invalid price feeds");
+    }
+
+    return true;
 }
 
 async function sendfillrequest(orderreceipt) {
@@ -323,4 +341,47 @@ async function processFillQueue() {
         ORDER_BROADCASTING = false;
     }
     setTimeout(processFillQueue, 50);
+}
+
+async function cryptowatchWsSetup() {
+    const cryptowatch_market_ids = [];
+    for (let market in MM_CONFIG.pairs) {
+        const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
+        const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
+        if (primaryPriceFeed) cryptowatch_market_ids.push(primaryPriceFeed);
+        if (secondaryPriceFeed) cryptowatch_market_ids.push(secondaryPriceFeed);
+    }
+
+    const subscriptionMsg = {
+      "subscribe": {
+        "subscriptions": []
+      }
+    }
+    for (let i in cryptowatch_market_ids) {
+        const cryptowatch_market_id = cryptowatch_market_ids[i].split(":")[1];
+        subscriptionMsg.subscribe.subscriptions.push({
+          "streamSubscription": {
+            "resource": `markets:${cryptowatch_market_id}:trades`
+          }
+        })
+    }
+    let cryptowatch_ws = new WebSocket("wss://stream.cryptowat.ch/connect?apikey=" + process.env.CRYPTOWATCH_API_KEY);
+    cryptowatch_ws.on('open', onopen);
+    cryptowatch_ws.on('message', onmessage);
+    cryptowatch_ws.on('close', onclose);
+    function onopen() {
+        cryptowatch_ws.send(JSON.stringify(subscriptionMsg));
+    }
+    function onmessage (data) {
+        const msg = JSON.parse(data);
+        if (!msg.marketUpdate) return;
+
+        const market_id = "cryptowatch:" + msg.marketUpdate.market.marketId;
+        let trades = msg.marketUpdate.tradesUpdate.trades;
+        let price = trades[trades.length - 1].priceStr / 1;
+        PRICE_FEEDS[market_id] = price;
+    };
+    function onclose () {
+        setTimeout(cryptowatchWsSetup, 5000);
+    }
 }
