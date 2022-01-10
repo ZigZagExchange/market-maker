@@ -88,6 +88,7 @@ function onWsOpen() {
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
+            setInterval(() => indicateLiquidity(market), 5000);
             zigzagws.send(JSON.stringify(msg));
         }
     }
@@ -212,13 +213,19 @@ function validatePriceFeed(market_id) {
     const mmConfig = MM_CONFIG.pairs[market_id];
     const primaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedPrimary;
     const secondaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedSecondary;
+
+    // Check if primary price exists
+    const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
+    if (!primaryPrice) throw new Error("Primary price feed unavailable");
     
     // If there is no secondary price feed, the price auto-validates
     if (!secondaryPriceFeedId) return true;
 
-    // If the secondary price feed varies from the primary price feed by more than 1%, assume something is broken
-    const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
+    // Check if secondary price exists
     const secondaryPrice = PRICE_FEEDS[secondaryPriceFeedId];
+    if (!secondaryPrice) throw new Error("Secondary price feed unavailable");
+
+    // If the secondary price feed varies from the primary price feed by more than 1%, assume something is broken
     const percentDiff = Math.abs(primaryPrice - secondaryPrice) / primaryPrice;
     if (percentDiff > 0.01) {
         throw new Error("Invalid price feeds");
@@ -384,4 +391,30 @@ async function cryptowatchWsSetup() {
     function onclose () {
         setTimeout(cryptowatchWsSetup, 5000);
     }
+}
+
+function indicateLiquidity (market_id) {
+    try {
+        validatePriceFeed(market_id);
+    } catch(e) {
+        return false;
+    }
+
+    const mmConfig = MM_CONFIG.pairs[market_id];
+    const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+    const buyPrice1 = midPrice * (1 - mmConfig.minSpread);
+    const buyPrice2 = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize / 3));
+    const buyPrice3 = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize * 2/3));
+    const sellPrice1 = midPrice * (1 + mmConfig.minSpread);
+    const sellPrice2 = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * mmConfig.maxSize / 3));
+    const sellPrice3 = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * mmConfig.maxSize * 2/3));
+    const liquidity = [];
+    liquidity.push(["s", sellPrice3, mmConfig.maxSize / 3]);
+    liquidity.push(["s", sellPrice2, mmConfig.maxSize / 3]);
+    liquidity.push(["s", sellPrice1, mmConfig.maxSize / 3]);
+    liquidity.push(["b", buyPrice1, mmConfig.maxSize / 3]);
+    liquidity.push(["b", buyPrice2, mmConfig.maxSize / 3]);
+    liquidity.push(["b", buyPrice3, mmConfig.maxSize / 3]);
+    const msg = { op: "indicateliqv2", args: [CHAIN_ID, market_id, liquidity] };
+    zigzagws.send(JSON.stringify(msg));
 }
