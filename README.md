@@ -24,7 +24,7 @@ You can add, remove, and configure pair settings in the `pairs` section. A pair 
 
 The primary price feed is the price feed used to determine the bids and asks of the market maker. The secondary price feed is used to validate the first price feed and make sure the market isn't returning bad data. If the primary and secondary price feeds vary by more than 1%, the market maker will not fill orders. 
 
-The slippage rate is the rate at which the spread increases as the base unit increases. For the example above, the spread goes up by 1e-5 for every one ETH in size added to an order. That's the equivalent of 0.1 bps / ETH in slippage. 
+The slippage rate is the rate at which the spread increases as the base unit increases. For the example above, the spread goes up by 1e-5 for every 1 ETH in size added to an order. That's the equivalent of 0.1 bps / ETH in slippage. 
 
 Orders coming in below the `minSpread` from the price feed will not be filled. 
 
