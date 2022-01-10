@@ -244,13 +244,13 @@ async function sendfillrequest(orderreceipt) {
     tokenBuy = market.quoteAssetId;
     // Add 1 bip to to protect against rounding errors
     sellQuantity = (baseQuantity * 1.0001).toFixed(market.baseAsset.decimals);
-    buyQuantity = quote.quoteQuantity.toFixed(market.quoteAsset.decimals);
+    buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
   } else if (side === "s") {
     tokenSell = market.quoteAssetId;
     tokenBuy = market.baseAssetId;
     // Add 1 bip to to protect against rounding errors
     sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
-    buyQuantity = baseQuantity.toFixed(market.baseAsset.decimals);
+    buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
   }
   const sellQuantityParsed = syncProvider.tokenSet.parseToken(
     tokenSell,
