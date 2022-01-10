@@ -4,7 +4,7 @@ Copy the `config.json.EXAMPLE` file to `config.json` to get started.
 
 Set your `eth_privkey` to be able to relay transactions. The ETH address with that private key should be loaded up with adequate funds for market making.
 
-For now, you need a Cryptowatch API KEY to use the market maker. Once you obtain one, you can set the `cryptowatchApiKey` field in `config.json`.
+For now, you need a Cryptowatch API key to use the market maker. Once you obtain one, you can set the `cryptowatchApiKey` field in `config.json`.
 
 # Settings
 
