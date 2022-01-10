@@ -278,6 +278,7 @@ async function sendfillrequest(orderreceipt) {
 }
 
 async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
+  console.log(swapOffer, fillOrder);
   const randint = (Math.random()*1000).toFixed(0);
   console.time('syncswap' + randint);
   const swap = await syncWallet.syncSwap({
