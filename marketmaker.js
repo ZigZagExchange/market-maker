@@ -88,7 +88,7 @@ function onWsOpen() {
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
-            setInterval(() => indicateLiquidity(market), 5000);
+            //setInterval(() => indicateLiquidity(market), 5000);
             zigzagws.send(JSON.stringify(msg));
         }
     }
