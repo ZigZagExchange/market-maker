@@ -227,8 +227,8 @@ function validatePriceFeed(market_id) {
 
     // If the secondary price feed varies from the primary price feed by more than 1%, assume something is broken
     const percentDiff = Math.abs(primaryPrice - secondaryPrice) / primaryPrice;
-    if (percentDiff > 0.01) {
-        throw new Error("Invalid price feeds");
+    if (percentDiff > 0.03) {
+        throw new Error("Circuit breaker triggered");
     }
 
     return true;
