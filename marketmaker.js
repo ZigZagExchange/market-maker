@@ -117,6 +117,7 @@ async function handleMessage(json) {
             orders.forEach(order => {
                 const orderid = order[1];
                 const fillable = isOrderFillable(order);
+                console.log(fillable);
                 if (fillable.fillable) {
                     FILL_QUEUE.push(order);
                 }
