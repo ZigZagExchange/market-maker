@@ -99,7 +99,7 @@ function onWsClose () {
     ORDER_BROADCASTING = false;
     setTimeout(() => {
         clearInterval(fillOrdersInterval)
-        zigzagws = new WebSocket(process.env.ZIGZAG_WS_URL);
+        zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
         zigzagws.on('open', onWsOpen);
         zigzagws.on('error', onWsClose);
     }, 5000);
