@@ -415,6 +415,6 @@ function indicateLiquidity (market_id) {
     liquidity.push(["b", buyPrice1, mmConfig.maxSize / 3]);
     liquidity.push(["b", buyPrice2, mmConfig.maxSize / 3]);
     liquidity.push(["b", buyPrice3, mmConfig.maxSize / 3]);
-    const msg = { op: "indicateliqv2", args: [CHAIN_ID, market_id, liquidity] };
+    const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity] };
     zigzagws.send(JSON.stringify(msg));
 }
