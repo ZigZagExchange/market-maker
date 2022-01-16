@@ -23,7 +23,7 @@ else {
 let activePairs = [];
 for (let marketId in MM_CONFIG.pairs) {
     const pair = MM_CONFIG.pairs[marketId];
-    if (pair.active) {
+    if (pair.base_active || pair.quote_active) {
         activePairs.push(marketId);
     }
 }
@@ -86,7 +86,7 @@ function onWsOpen() {
     zigzagws.on('close', onWsClose);
     fillOrdersInterval = setInterval(fillOpenOrders, 5000);
     for (let market in MM_CONFIG.pairs) {
-        if (MM_CONFIG.pairs[market].active) {
+        if (MM_CONFIG.pairs[market].base_active || MM_CONFIG.pairs[market].quote_active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
             //setInterval(() => indicateLiquidity(market), 5000);
             zigzagws.send(JSON.stringify(msg));
@@ -148,7 +148,6 @@ function isOrderFillable(order) {
     const mmConfig = MM_CONFIG.pairs[market_id];
     if (chainid != CHAIN_ID) return { fillable: false, reason: "badchain" }
     if (!market) return { fillable: false, reason: "badmarket" }
-    if (!mmConfig.active) return { fillable: false, reason: "inactivemarket" }
 
     const baseQuantity = order[5];
     const quoteQuantity = order[6];
@@ -156,6 +155,10 @@ function isOrderFillable(order) {
     const side = order[3];
     const price = order[4];
     const now = Date.now() / 1000 | 0;
+
+    if (side == 's' && !mmConfig.base_active) return { fillable: false, reason: "inactivemarket" }
+    if (side == 'b' && !mmConfig.quote_active) return { fillable: false, reason: "inactivemarket" }
+
     if (now > expires) {
         return { fillable: false, reason: "expired" };
     }
@@ -403,19 +406,49 @@ function indicateLiquidity (market_id) {
 
     const mmConfig = MM_CONFIG.pairs[market_id];
     const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
-    const buyPrice1 = midPrice * (1 - mmConfig.minSpread);
-    const buyPrice2 = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize / 3));
-    const buyPrice3 = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize * 2/3));
-    const sellPrice1 = midPrice * (1 + mmConfig.minSpread);
-    const sellPrice2 = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * mmConfig.maxSize / 3));
-    const sellPrice3 = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * mmConfig.maxSize * 2/3));
+    const market = MARKETS[market_id];
+    const baseCurrency = market.baseAsset;
+    const quoteCurrency = market.quoteAsset;
+    let baseSize = 0;
+    let quoteSize = 0;
+    try {
+      const baseBalance_decimals = await syncWallet.getBalance(baseCurrency.id, "committed");
+      const quoteBalance_decimals = await syncWallet.getBalance(quoteCurrency.id, "committed");
+      // convert in human-readable form
+      const baseBalance = parseFloat(baseBalance_decimals / Math.pow(10, baseCurrency.decimals));
+      const quoteBalance = parseFloat(quoteBalance_decimals / Math.pow(10, quoteCurrency.decimals));
+      // limit both sides to maxSize
+      baseSize = Math.min(baseBalance, mmConfig.maxSize);
+      quoteSize = Math.min((quoteBalance / midPrice), mmConfig.maxSize).toFixed(baseCurrency.decimals); // use quoteSize in baseCurrency
+      // set side false if below min size    
+      mmConfig.base_active = (baseSize < mmConfig.minSize) ? false : true;
+      mmConfig.quote_active = (quoteSize < mmConfig.minSize) ? false : true;
+    } catch (e) {
+        // could not get size, use generic max size
+        console.log("Could not connect to zksync API to indicateLiquidity");
+        baseSize = mmConfig.maxSize;
+        quoteSize = mmConfig.maxSize;
+    }
+
     const liquidity = [];
-    liquidity.push(["s", sellPrice3, mmConfig.maxSize / 3]);
-    liquidity.push(["s", sellPrice2, mmConfig.maxSize / 3]);
-    liquidity.push(["s", sellPrice1, mmConfig.maxSize / 3]);
-    liquidity.push(["b", buyPrice1, mmConfig.maxSize / 3]);
-    liquidity.push(["b", buyPrice2, mmConfig.maxSize / 3]);
-    liquidity.push(["b", buyPrice3, mmConfig.maxSize / 3]);
+    if (mmConfig.base_active) {
+      const sellPrice1 = midPrice * (1 + mmConfig.minSpread);
+      const sellPrice2 = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * quoteSize / 3));
+      const sellPrice3 = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * quoteSize * 2/3));
+
+      liquidity.push(["s", sellPrice3, baseSize / 3]);
+      liquidity.push(["s", sellPrice2, baseSize / 3]);
+      liquidity.push(["s", sellPrice1, baseSize / 3]);
+    }
+    if (mmConfig.quote_active) {
+      const buyPrice1 = midPrice * (1 - mmConfig.minSpread);
+      const buyPrice2 = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * baseSize / 3));
+      const buyPrice3 = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * baseSize * 2/3));
+
+      liquidity.push(["b", buyPrice1, quoteSize / 3]);
+      liquidity.push(["b", buyPrice2, quoteSize / 3]);
+      liquidity.push(["b", buyPrice3, quoteSize / 3]);
+    }
     const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity] };
     zigzagws.send(JSON.stringify(msg));
 }

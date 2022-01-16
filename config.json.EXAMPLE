@@ -11,7 +11,8 @@
             "maxSize": 100,
             "minSize": 0.0003,
             "minSpread": 0.0005,
-            "active": true
+            "base_active": true,
+            "quote_active": true
         },
         "ETH-USDT": {
             "priceFeedPrimary": "cryptowatch:588",
@@ -20,7 +21,8 @@
             "maxSize": 100,
             "minSize": 0.0003,
             "minSpread": 0.0005,
-            "active": true
+            "base_active": true,
+            "quote_active": true
         },
         "ETH-DAI": {
             "priceFeedPrimary": "cryptowatch:63533",
@@ -29,7 +31,8 @@
             "maxSize": 100,
             "minSize": 0.0003,
             "minSpread": 0.0005,
-            "active": true
+            "base_active": true,
+            "quote_active": true
         },
         "ETH-FRAX": {
             "priceFeedPrimary": "cryptowatch:6631",
@@ -38,7 +41,8 @@
             "maxSize": 100,
             "minSize": 0.0003,
             "minSpread": 0.0005,
-            "active": false
+            "base_active": true,
+            "quote_active": true
         },
         "WBTC-USDT": {
             "priceFeedPrimary": "cryptowatch:579",
@@ -47,7 +51,8 @@
             "maxSize": 10,
             "minSize": 0.00003,
             "minSpread": 0.0005,
-            "active": false
+            "base_active": true,
+            "quote_active": true
         },
         "WBTC-USDC": {
             "priceFeedPrimary": "cryptowatch:6630",
@@ -56,7 +61,8 @@
             "maxSize": 10,
             "minSize": 0.00003,
             "minSpread": 0.0005,
-            "active": false
+            "base_active": true,
+            "quote_active": true
         },
         "WBTC-DAI": {
             "priceFeedPrimary": "cryptowatch:63532",
@@ -65,7 +71,8 @@
             "maxSize": 10,
             "minSize": 0.00003,
             "minSpread": 0.0005,
-            "active": false
+            "base_active": true,
+            "quote_active": true
         },
         "USDC-USDT": {
             "priceFeedPrimary": "cryptowatch:6636",
@@ -74,7 +81,8 @@
             "maxSize": 100000,
             "minSize": 1,
             "minSpread": 0.0003,
-            "active": true
+            "base_active": true,
+            "quote_active": true
         },
         "DAI-USDT": {
             "priceFeedPrimary": "cryptowatch:63349",
@@ -83,7 +91,8 @@
             "maxSize": 100000,
             "minSize": 1,
             "minSpread": 0.0003,
-            "active": true
+            "base_active": true,
+            "quote_active": true
         },
         "DAI-USDC": {
             "priceFeedPrimary": "cryptowatch:61485",
@@ -92,7 +101,8 @@
             "maxSize": 100000,
             "minSize": 1,
             "minSpread": 0.0003,
-            "active": true
+            "base_active": true,
+            "quote_active": true
         }
     }
 }
