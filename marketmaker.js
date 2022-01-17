@@ -41,7 +41,7 @@ setTimeout(processFillQueue, 1000);
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
 let syncWallet, ethersProvider, syncProvider, ethWallet, 
-    fillOrdersInterval, accountState;
+    fillOrdersInterval, indicateLiquidityInterval, accountState;
 ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
@@ -80,6 +80,7 @@ for (let i in markets) {
 
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
+zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
@@ -87,9 +88,11 @@ function onWsOpen() {
     fillOrdersInterval = setInterval(fillOpenOrders, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
+            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 5000);
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
-            setInterval(() => indicateLiquidity(market), 5000);
-            zigzagws.send(JSON.stringify(msg));
+            // There's a weird bug happening where even though the websocket is open the message isn't going through 
+            // so a time delay was set
+            setTimeout(() => zigzagws.send(JSON.stringify(msg)), 100);
         }
     }
 }
@@ -99,6 +102,7 @@ function onWsClose () {
     ORDER_BROADCASTING = false;
     setTimeout(() => {
         clearInterval(fillOrdersInterval)
+        clearInterval(indicateLiquidityInterval)
         zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
         zigzagws.on('open', onWsOpen);
         zigzagws.on('error', onWsClose);
@@ -107,7 +111,7 @@ function onWsClose () {
 
 async function handleMessage(json) {
     const msg = JSON.parse(json);
-    if (msg.op != "lastprice") console.log(json.toString());
+    if (!(["lastprice", "indicateliq2"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
             ORDER_BROADCASTING = false;
