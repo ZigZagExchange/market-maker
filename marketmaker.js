@@ -88,7 +88,7 @@ function onWsOpen() {
     fillOrdersInterval = setInterval(fillOpenOrders, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
-            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 5000);
+            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 10000);
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
             // There's a weird bug happening where even though the websocket is open the message isn't going through 
             // so a time delay was set
@@ -407,19 +407,16 @@ function indicateLiquidity (market_id) {
 
     const mmConfig = MM_CONFIG.pairs[market_id];
     const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
-    const buyPrice1 = midPrice * (1 - mmConfig.minSpread);
-    const buyPrice2 = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize / 3));
-    const buyPrice3 = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize * 2/3));
-    const sellPrice1 = midPrice * (1 + mmConfig.minSpread);
-    const sellPrice2 = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * mmConfig.maxSize / 3));
-    const sellPrice3 = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * mmConfig.maxSize * 2/3));
+    if (!midPrice) return false;
+
+    const splits = 15;
     const liquidity = [];
-    liquidity.push(["s", sellPrice3, mmConfig.maxSize / 3]);
-    liquidity.push(["s", sellPrice2, mmConfig.maxSize / 3]);
-    liquidity.push(["s", sellPrice1, mmConfig.maxSize / 3]);
-    liquidity.push(["b", buyPrice1, mmConfig.maxSize / 3]);
-    liquidity.push(["b", buyPrice2, mmConfig.maxSize / 3]);
-    liquidity.push(["b", buyPrice3, mmConfig.maxSize / 3]);
+    for (let i=1; i <= splits; i++) {
+        const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize * i/splits));
+        const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * mmConfig.maxSize * i/splits));
+        liquidity.push(["s", sellPrice, mmConfig.maxSize / splits]);
+        liquidity.push(["b", buyPrice, mmConfig.maxSize / splits]);
+    }
     const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity] };
     zigzagws.send(JSON.stringify(msg));
 }
