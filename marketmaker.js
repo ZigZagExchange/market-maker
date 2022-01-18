@@ -88,7 +88,7 @@ function onWsOpen() {
     fillOrdersInterval = setInterval(fillOpenOrders, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
-            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 10000);
+            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 5000);
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
             // There's a weird bug happening where even though the websocket is open the message isn't going through 
             // so a time delay was set
