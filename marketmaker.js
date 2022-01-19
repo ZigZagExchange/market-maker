@@ -409,7 +409,7 @@ function indicateLiquidity (market_id) {
     const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
     if (!midPrice) return false;
 
-    const splits = 15;
+    const splits = 10;
     const liquidity = [];
     for (let i=1; i <= splits; i++) {
         const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize * i/splits));
