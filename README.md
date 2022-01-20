@@ -1,4 +1,12 @@
-# Setup
+# Zigzag Market Maker
+
+This is the reference market maker for Zigzag zksync markets. It works on both Rinkeby and Mainnet.
+
+This market maker uses existing price feeds to set bids and asks for a market. For now, in order to provide liquidity for a market, there must be an existing market with **greater** liquidity listed on Cryptowatch, via either Uniswap or some other centralized exchange. It is crucial that the oracle market have more liquidity than the Zigzag one so that you are not prone to oracle attacks. 
+
+Soon we will add the ability to run standalone markets and this will not be an issue. 
+
+## Setup
 
 Copy the `config.json.EXAMPLE` file to `config.json` to get started. 
 
@@ -6,7 +14,13 @@ Set your `eth_privkey` to be able to relay transactions. The ETH address with th
 
 For now, you need a Cryptowatch API key to use the market maker. Once you obtain one, you can set the `cryptowatchApiKey` field in `config.json`.
 
-# Settings
+To run the marketmaker:
+
+```bash
+node marketmaker.js
+```
+
+## Settings
 
 You can add, remove, and configure pair settings in the `pairs` section. A pair setting looks like this:
 
@@ -30,7 +44,7 @@ Orders coming in below the `minSpread` from the price feed will not be filled.
 
 A market can be set inactive by flipping the active switch to `false`. 
 
-# Configuration Via Environment Variables
+## Configuration Via Environment Variables
 
 If your hosting service requires you to pass in configs via environment variables you can compress `config.json`:
 
