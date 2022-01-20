@@ -85,10 +85,10 @@ zigzagws.on('error', console.error);
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
     zigzagws.on('close', onWsClose);
-    fillOrdersInterval = setInterval(fillOpenOrders, 5000);
+    fillOrdersInterval = setInterval(fillOpenOrders, 4500);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
-            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 14000);
+            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 5000);
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
             // There's a weird bug happening where even though the websocket is open the message isn't going through 
             // so a time delay was set
@@ -407,6 +407,7 @@ function indicateLiquidity (market_id) {
 
     const mmConfig = MM_CONFIG.pairs[market_id];
     const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+    const expires = (Date.now() / 1000 | 0) + 5; // 5s expiry
     if (!midPrice) return false;
 
     const splits = 10;
@@ -414,8 +415,8 @@ function indicateLiquidity (market_id) {
     for (let i=1; i <= splits; i++) {
         const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize * i/splits));
         const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * mmConfig.maxSize * i/splits));
-        liquidity.push(["s", sellPrice, mmConfig.maxSize / splits]);
-        liquidity.push(["b", buyPrice, mmConfig.maxSize / splits]);
+        liquidity.push(["s", sellPrice, mmConfig.maxSize / splits, expires]);
+        liquidity.push(["b", buyPrice, mmConfig.maxSize / splits, expires]);
     }
     const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity] };
     zigzagws.send(JSON.stringify(msg));
