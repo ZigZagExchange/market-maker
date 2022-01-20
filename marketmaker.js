@@ -88,7 +88,7 @@ function onWsOpen() {
     fillOrdersInterval = setInterval(fillOpenOrders, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
-            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 4500);
+            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 5000);
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
             // There's a weird bug happening where even though the websocket is open the message isn't going through 
             // so a time delay was set
@@ -414,6 +414,7 @@ async function cryptowatchWsSetup() {
     }
 }
 
+const CLIENT_ID = (Math.random() * 100000).toString(16);
 function indicateLiquidity (market_id) {
     try {
         validatePriceFeed(market_id);
@@ -423,7 +424,7 @@ function indicateLiquidity (market_id) {
 
     const mmConfig = MM_CONFIG.pairs[market_id];
     const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
-    const expires = (Date.now() / 1000 | 0) + 5; // 5s expiry
+    const expires = (Date.now() / 1000 | 0) + 15; // 10s expiry
     if (!midPrice) return false;
 
     const splits = 10;
@@ -434,6 +435,6 @@ function indicateLiquidity (market_id) {
         liquidity.push(["s", sellPrice, mmConfig.maxSize / splits, expires]);
         liquidity.push(["b", buyPrice, mmConfig.maxSize / splits, expires]);
     }
-    const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity] };
+    const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity, CLIENT_ID] };
     zigzagws.send(JSON.stringify(msg));
 }
