@@ -423,7 +423,7 @@ function indicateLiquidity (market_id) {
 
     const mmConfig = MM_CONFIG.pairs[market_id];
     const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
-    const expires = (Date.now() / 1000 | 0) + 5; // 5s expiry
+    const expires = (Date.now() / 1000 | 0) + 7; // 7s expiry
     if (!midPrice) return false;
 
     const splits = 10;
