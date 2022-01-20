@@ -363,6 +363,20 @@ async function cryptowatchWsSetup() {
         if (secondaryPriceFeed) cryptowatch_market_ids.push(secondaryPriceFeed);
     }
 
+    // Set initial prices
+    const cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
+    const cryptowatch_markets = await fetch("https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey).then(r => r.json());
+    const cryptowatch_market_prices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
+    for (let i in cryptowatch_market_ids) {
+        const cryptowatch_market_id = cryptowatch_market_ids[i].split(":")[1];
+        const cryptowatch_market = cryptowatch_markets.result.find(row => row.id == cryptowatch_market_id);
+        const exchange = cryptowatch_market.exchange;
+        const pair = cryptowatch_market.pair;
+        const key = `market:${exchange}:${pair}`;
+        PRICE_FEEDS[cryptowatch_market_ids[i]] = cryptowatch_market_prices.result[key];
+    }
+    console.log(PRICE_FEEDS);
+
     const subscriptionMsg = {
       "subscribe": {
         "subscriptions": []
@@ -370,13 +384,15 @@ async function cryptowatchWsSetup() {
     }
     for (let i in cryptowatch_market_ids) {
         const cryptowatch_market_id = cryptowatch_market_ids[i].split(":")[1];
+
+        // first get initial price info
+
         subscriptionMsg.subscribe.subscriptions.push({
           "streamSubscription": {
             "resource": `markets:${cryptowatch_market_id}:trades`
           }
         })
     }
-    const cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
     let cryptowatch_ws = new WebSocket("wss://stream.cryptowat.ch/connect?apikey=" + cryptowatchApiKey);
     cryptowatch_ws.on('open', onopen);
     cryptowatch_ws.on('message', onmessage);
