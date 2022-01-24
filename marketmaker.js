@@ -111,7 +111,7 @@ function onWsClose () {
 
 async function handleMessage(json) {
     const msg = JSON.parse(json);
-    if (!(["lastprice", "liquidity2"]).includes(msg.op)) console.log(json.toString());
+    if (!(["liquidity2"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
             ORDER_BROADCASTING = false;
