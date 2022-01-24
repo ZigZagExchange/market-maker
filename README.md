@@ -40,7 +40,7 @@ You can add, remove, and configure pair settings in the `pairs` section. A pair 
 
 There is only 1 mode available at the moment, `"pricefeed"`. This mode follows an external price oracle and updates indicated bids and asks based on that. A second mode, `"independent"` is under development where the price is set independent of a price feed. 
 
-For all modes the `priceFeedPrimary`, `slippageRate`, `maxSize`, `minSize`, `minSpread`, and `active` settings are mandatory.
+For all modes the `slippageRate`, `maxSize`, `minSize`, `minSpread`, and `active` settings are mandatory.
 
 For `pricefeed` mode, the `priceFeedPrimary` is mandatory. 
 
