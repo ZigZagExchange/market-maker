@@ -26,6 +26,7 @@ You can add, remove, and configure pair settings in the `pairs` section. A pair 
 
 ```
 "ETH-USDC": {
+    "mode": "pricefeed",
     "priceFeedPrimary": "cryptowatch:6631",
     "priceFeedSecondary": "cryptowatch:588",
     "slippageRate": 1e-5,
@@ -35,6 +36,12 @@ You can add, remove, and configure pair settings in the `pairs` section. A pair 
     "active": true
 }
 ```
+
+There is only 1 mode available at the moment, `"pricefeed"`. This mode follows an external price oracle and updates indicated bids and asks based on that. A second mode, `"independent"` is under development where the price is set independent of a price feed. 
+
+For all modes the `priceFeedPrimary`, `slippageRate`, `maxSize`, `minSize`, `minSpread`, and `active` settings are mandatory.
+
+For `pricefeed` mode, the `priceFeedPrimary` is mandatory as well. 
 
 The primary price feed is the price feed used to determine the bids and asks of the market maker. The secondary price feed is used to validate the first price feed and make sure the market isn't returning bad data. If the primary and secondary price feeds vary by more than 1%, the market maker will not fill orders. 
 
