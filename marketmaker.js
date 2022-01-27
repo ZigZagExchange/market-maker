@@ -208,6 +208,7 @@ function genquote(chainid, market_id, side, baseQuantity) {
         throw new Error("badside");
     }
     const primaryPrice = getMidPrice(market_id);
+    if (!primaryPrice) throw new Error("badprice");
     const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
     let quoteQuantity;
     if (side === 'b') {
@@ -464,10 +465,10 @@ function getMidPrice (market_id) {
     const mmConfig = MM_CONFIG.pairs[market_id];
     const mode = mmConfig.mode || "pricefeed";
     let midPrice;
-    if (mmConfig.mode == "constant") {
+    if (mode == "constant") {
         midPrice = mmConfig.initPrice;
     }
-    else if (mmConfig.mode == "pricefeed") {
+    else if (mode == "pricefeed") {
         midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
     }
     return midPrice;
