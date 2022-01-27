@@ -27,6 +27,7 @@ You can add, remove, and configure pair settings in the `pairs` section. A pair 
 ```
 "ETH-USDC": {
     "mode": "pricefeed",
+    "side": "d",
     "initPrice": null,
     "priceFeedPrimary": "cryptowatch:6631",
     "priceFeedSecondary": "cryptowatch:588",
@@ -45,6 +46,8 @@ For all modes the `slippageRate`, `maxSize`, `minSize`, `minSpread`, and `active
 For `pricefeed` mode, the `priceFeedPrimary` is mandatory. 
 
 For `independent` mode, the `initPrice` is mandatory. 
+
+The `side` setting can be toggled for single-sided liquidity. By default, the side setting is set to `d`, which stands for double-sided liquidity. To toggle single-sided liquidity, the value can be set to `b` or `s` for buy-side only or sell-side only.
 
 The primary price feed is the price feed used to determine the bids and asks of the market maker. The secondary price feed is used to validate the first price feed and make sure the market isn't returning bad data. If the primary and secondary price feeds vary by more than 1%, the market maker will not fill orders. 
 
