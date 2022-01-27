@@ -10,6 +10,7 @@ dotenv.config();
 // Globals
 const PRICE_FEEDS = {};
 const OPEN_ORDERS = {};
+let ACCOUNT_STATE = null;
 
 // Load MM config
 let MM_CONFIG;
@@ -41,7 +42,7 @@ setTimeout(processFillQueue, 1000);
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
 let syncWallet, ethersProvider, syncProvider, ethWallet, 
-    fillOrdersInterval, indicateLiquidityInterval, accountState;
+    fillOrdersInterval, indicateLiquidityInterval;
 ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
@@ -55,11 +56,14 @@ try {
         });
         console.log(signKeyResult);
     }
-    accountState = await syncWallet.getAccountState();
 } catch (e) {
     console.log(e);
     throw new Error("Could not connect to zksync API");
 }
+
+// Update account state loop
+await updateAccountState();
+setInterval(updateAccountState, 30000);
 
 // Get markets info
 const activePairsText = activePairs.join(',');
@@ -160,7 +164,13 @@ function isOrderFillable(order) {
     const expires = order[7];
     const side = order[3];
     const price = order[4];
+    const sellCurrency = (side === 's') ? market.quoteAsset.symbol : market.baseAsset.symbol;
+    const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
+    const sellQuantity = (side === 's') ? quoteQuantity : baseQuantity;
+    const balance = ACCOUNT_STATE.committed.balances[sellCurrency] / 10**sellDecimals;
+    console.log(sellCurrency, balance);
     const now = Date.now() / 1000 | 0;
+
     if (now > expires) {
         return { fillable: false, reason: "expired" };
     }
@@ -174,6 +184,10 @@ function isOrderFillable(order) {
     }
     else if (baseQuantity > mmConfig.maxSize) {
         return { fillable: false, reason: "badsize" };
+    }
+
+    if (balance < sellQuantity) {
+        return { fillable: false, reason: "badbalance" };
     }
 
     let quote;
@@ -472,4 +486,8 @@ function getMidPrice (market_id) {
         midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
     }
     return midPrice;
+}
+
+async function updateAccountState() {
+    ACCOUNT_STATE = await syncWallet.getAccountState();
 }
