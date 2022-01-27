@@ -203,6 +203,10 @@ function genquote(chainid, market_id, side, baseQuantity) {
     validatePriceFeed(market_id);
 
     const mmConfig = MM_CONFIG.pairs[market_id];
+    const mmSide = mmConfig.side || 'd';
+    if (mmConfig.side !== 'd' && mmConfig.side === side) {
+        throw new Error("badside");
+    }
     const primaryPrice = getMidPrice(market_id);
     const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
     let quoteQuantity;
