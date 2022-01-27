@@ -203,8 +203,7 @@ function genquote(chainid, market_id, side, baseQuantity) {
     validatePriceFeed(market_id);
 
     const mmConfig = MM_CONFIG.pairs[market_id];
-    const primaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedPrimary;
-    const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
+    const primaryPrice = getMidPrice(market_id);
     const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
     let quoteQuantity;
     if (side === 'b') {
@@ -221,8 +220,16 @@ function genquote(chainid, market_id, side, baseQuantity) {
 
 function validatePriceFeed(market_id) {
     const mmConfig = MM_CONFIG.pairs[market_id];
+    const mode = MM_CONFIG.pairs[market_id].mode || "pricefeed";
+    const initPrice = MM_CONFIG.pairs[market_id].initPrice;
     const primaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedPrimary;
     const secondaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedSecondary;
+
+    // Constant mode checks
+    if (mode === "constant") {
+        if (initPrice) return true;
+        else throw new Error("No initPrice available");
+    }
 
     // Check if primary price exists
     const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
@@ -428,7 +435,7 @@ function indicateLiquidity (market_id) {
     }
 
     const mmConfig = MM_CONFIG.pairs[market_id];
-    const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+    const midPrice = getMidPrice(market_id);
     const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
     const side = mmConfig.side || 'd';
     if (!midPrice) return false;
@@ -447,4 +454,17 @@ function indicateLiquidity (market_id) {
     }
     const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity, CLIENT_ID] };
     zigzagws.send(JSON.stringify(msg));
+}
+
+function getMidPrice (market_id) {
+    const mmConfig = MM_CONFIG.pairs[market_id];
+    const mode = mmConfig.mode || "pricefeed";
+    let midPrice;
+    if (mmConfig.mode == "constant") {
+        midPrice = mmConfig.initPrice;
+    }
+    else if (mmConfig.mode == "pricefeed") {
+        midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+    }
+    return midPrice;
 }

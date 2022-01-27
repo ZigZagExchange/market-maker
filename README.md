@@ -39,13 +39,17 @@ You can add, remove, and configure pair settings in the `pairs` section. A pair 
 }
 ```
 
-There is only 1 mode available at the moment, `"pricefeed"`. This mode follows an external price oracle and updates indicated bids and asks based on that. A second mode, `"independent"` is under development where the price is set independent of a price feed. 
+There is are 2 modes available with a 3rd on the way. 
+
+* `pricefeed`: Follows an external price oracle and updates indicated bids and asks based on that. 
+* `constant`: Sets an `initPrice` and market makes around that price. Can be combined with single-sided liquidity to simulate limit orders.
+* `independent`: Under development. The price is set independent of a price feed. 
 
 For all modes the `slippageRate`, `maxSize`, `minSize`, `minSpread`, and `active` settings are mandatory.
 
 For `pricefeed` mode, the `priceFeedPrimary` is mandatory. 
 
-For `independent` mode, the `initPrice` is mandatory. 
+For `independent` and `constant` mode, the `initPrice` is mandatory. 
 
 The `side` setting can be toggled for single-sided liquidity. By default, the side setting is set to `d`, which stands for double-sided liquidity. To toggle single-sided liquidity, the value can be set to `b` or `s` for buy-side only or sell-side only.
 
@@ -56,6 +60,53 @@ The slippage rate is the rate at which the spread increases as the base unit inc
 Orders coming in below the `minSpread` from the price feed will not be filled. 
 
 A market can be set inactive by flipping the active switch to `false`. 
+
+## Pair Setting Examples 
+
+Stable-Stable constant price:
+
+```
+"DAI-USDC": {
+    "mode": "constant",
+    "initPrice": 1,
+    "slippageRate": 1e-9,
+    "maxSize": 100000,
+    "minSize": 1,
+    "minSpread": 0.0003,
+    "active": true
+}
+```
+
+Single-sided accumulation:
+
+```
+"ETH-USDC": {
+    "mode": "pricefeed",
+    "side": "b",
+    "priceFeedPrimary": "cryptowatch:6631",
+    "priceFeedSecondary": "cryptowatch:588",
+    "slippageRate": 1e-5,
+    "maxSize": 100,
+    "minSize": 0.0003,
+    "minSpread": 0.0005,
+    "active": true
+}
+```
+
+Sell the rip:
+
+```
+"DYDX-USDC": {
+    "mode": "constant",
+    "side": "s",
+    "initPrice": 20,
+    "slippageRate": 1e-5,
+    "maxSize": 1000,
+    "minSize": 0.5,
+    "minSpread": 0,
+    "active": true
+}
+```
 
 ## Configuration Via Environment Variables
 
