@@ -39,7 +39,7 @@ You can add, remove, and configure pair settings in the `pairs` section. A pair 
 }
 ```
 
-There is are 2 modes available with a 3rd on the way. 
+There are 2 modes available with a 3rd on the way. 
 
 * `pricefeed`: Follows an external price oracle and updates indicated bids and asks based on that. 
 * `constant`: Sets an `initPrice` and market makes around that price. Can be combined with single-sided liquidity to simulate limit orders.
