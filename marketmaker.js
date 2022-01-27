@@ -111,7 +111,7 @@ function onWsClose () {
 
 async function handleMessage(json) {
     const msg = JSON.parse(json);
-    if (!(["liquidity2"]).includes(msg.op)) console.log(json.toString());
+    if (!(["lastprice", "liquidity2"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
             ORDER_BROADCASTING = false;
@@ -150,6 +150,7 @@ function isOrderFillable(order) {
     const market_id = order[2];
     const market = MARKETS[market_id];
     const mmConfig = MM_CONFIG.pairs[market_id];
+    const mmSide = mmConfig.side || 'd';
     if (chainid != CHAIN_ID) return { fillable: false, reason: "badchain" }
     if (!market) return { fillable: false, reason: "badmarket" }
     if (!mmConfig.active) return { fillable: false, reason: "inactivemarket" }
@@ -162,6 +163,10 @@ function isOrderFillable(order) {
     const now = Date.now() / 1000 | 0;
     if (now > expires) {
         return { fillable: false, reason: "expired" };
+    }
+
+    if (mmSide !== 'd' && mmSide == side) {
+        return { fillable: false, reason: "badside" };
     }
     
     if (baseQuantity < mmConfig.minSize) {
@@ -425,6 +430,7 @@ function indicateLiquidity (market_id) {
     const mmConfig = MM_CONFIG.pairs[market_id];
     const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
     const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
+    const side = mmConfig.side || 'd';
     if (!midPrice) return false;
 
     const splits = 10;
@@ -432,8 +438,12 @@ function indicateLiquidity (market_id) {
     for (let i=1; i <= splits; i++) {
         const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * mmConfig.maxSize * i/splits));
         const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * mmConfig.maxSize * i/splits));
-        liquidity.push(["s", sellPrice, mmConfig.maxSize / splits, expires]);
-        liquidity.push(["b", buyPrice, mmConfig.maxSize / splits, expires]);
+        if ((['b','d']).includes(side)) {
+            liquidity.push(["b", buyPrice, mmConfig.maxSize / splits, expires]);
+        }
+        if ((['s','d']).includes(side)) {
+            liquidity.push(["s", sellPrice, mmConfig.maxSize / splits, expires]);
+        }
     }
     const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity, CLIENT_ID] };
     zigzagws.send(JSON.stringify(msg));
