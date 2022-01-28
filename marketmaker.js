@@ -460,7 +460,7 @@ function indicateLiquidity (market_id) {
     const baseBalance = ACCOUNT_STATE.committed.balances[marketInfo.baseAsset.symbol] / 10**marketInfo.baseAsset.decimals;
     const quoteBalance = ACCOUNT_STATE.committed.balances[marketInfo.quoteAsset.symbol] / 10**marketInfo.quoteAsset.decimals;
     const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
-    const maxBuySize = Math.min(quoteBalance, (mmConfig.maxSize * midPrice));
+    const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
     if (!midPrice) return false;
 
     const splits = 10;
