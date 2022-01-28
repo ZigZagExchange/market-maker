@@ -10,6 +10,7 @@ dotenv.config();
 // Globals
 const PRICE_FEEDS = {};
 const OPEN_ORDERS = {};
+const NONCES = {};
 let ACCOUNT_STATE = null;
 
 // Load MM config
@@ -320,7 +321,12 @@ async function sendfillrequest(orderreceipt) {
 }
 
 async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
-  console.log(swapOffer, fillOrder);
+  // Nonce check
+  const nonce = swapOffer.nonce;
+  const userNonce = NONCES[swapOffer.accountId];
+  if (nonce <= userNonce) {
+      throw new Error("badnonce");
+  }
   const randint = (Math.random()*1000).toFixed(0);
   console.time('syncswap' + randint);
   const swap = await syncWallet.syncSwap({
@@ -334,10 +340,13 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
   console.timeEnd('syncswap' + randint);
 
   console.time('receipt' + randint);
-  let receipt, success;
+  let receipt, success = false;
   try {
     receipt = await swap.awaitReceipt();
-    if (receipt.success) success = true;
+    if (receipt.success) {
+        success = true;
+        NONCES[swapOffer.accountId] = swapOffer.nonce;
+    }
   } catch (e) {
     receipt = null;
     success = false;
