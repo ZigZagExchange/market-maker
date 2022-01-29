@@ -6,6 +6,16 @@ This market maker uses existing price feeds to set bids and asks for a market. F
 
 Soon we will add the ability to run standalone markets and this will not be an issue. 
 
+## Requirements
+
+* Activated zkSync account
+* Ethereum private key of that account
+* Funds in that account corresponding to the pairs you want to market make
+* [Cryptowatch API key](https://cryptowat.ch/account/api-access) (free for limited time)
+* [Node.js](https://nodejs.org/en/download/)
+* Node.js 16 works on macOS, Windows and Linux (17 seems not)
+* Optional: VPS when you have high ping running the bot
+
 ## Setup
 
 Copy the `config.json.EXAMPLE` file to `config.json` to get started. 
