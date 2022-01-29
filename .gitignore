@@ -1,4 +1,5 @@
 .env
 node_modules/
 config.json
+independent-market-config.json
 config/
