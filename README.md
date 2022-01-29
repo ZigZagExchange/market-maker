@@ -57,7 +57,7 @@ The primary price feed is the price feed used to determine the bids and asks of 
 
 The slippage rate is the rate at which the spread increases as the base unit increases. For the example above, the spread goes up by 1e-5 for every 1 ETH in size added to an order. That's the equivalent of 0.1 bps / ETH in slippage. 
 
-Orders coming in below the `minSpread` from the price feed will not be filled. 
+Orders coming in below the `minSpread` from the price feed will not be filled. The spread is calculated as a decimal value. 0.01 is 1%, and 0.0002 is 2 basis points (bps).
 
 A market can be set inactive by flipping the active switch to `false`. 
 
