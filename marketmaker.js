@@ -15,6 +15,10 @@ let ACCOUNT_STATE = null;
 let ORDER_BROADCASTING = false;
 const FILL_QUEUE = [];
 
+const MODE_CONSTANT = 'constant';
+const MODE_INDEPENDENT = 'independent';
+const MODE_PRICEFEED = 'pricefeed';
+
 // Load MM config
 let MM_CONFIG;
 if (process.env.MM_CONFIG) {
@@ -30,6 +34,36 @@ for (let marketId in MM_CONFIG.pairs) {
         activePairs.push(marketId);
     }
 }
+
+let MM_INDEPENDENT_CONFIG;
+// Load independent mode prices if present
+
+if (process.env.MM_INDEPENDENT_CONFIG) {
+    MM_INDEPENDENT_CONFIG = JSON.parse(process.env.MM_INDEPENDENT_CONFIG);
+} else {
+    try {
+        const mmIndependentConfigFile = fs.readFileSync('independent-market-config.json', 'utf8');
+        console.log('independent config file', mmIndependentConfigFile);
+        MM_INDEPENDENT_CONFIG = JSON.parse(mmIndependentConfigFile);
+    } catch (error) {
+        //Squelch this error. Most likely we didnt have a config file, but we will check the data in a moment.
+    }
+}
+
+if (MM_INDEPENDENT_CONFIG) {
+    console.log('INDEPENDENT MARKET CONFIG', MM_INDEPENDENT_CONFIG);
+}
+
+for (let market in MM_CONFIG.pairs) {
+    if (MM_CONFIG.pairs[market].mode === MODE_INDEPENDENT) {
+        if (!MM_INDEPENDENT_CONFIG?.pairs[market]?.lastPersistedPrice) {
+            console.warn(`${market} market is in independent mode, and will be priced with the default initial price. You can disregard this if this is the first time launching this market.`);
+        } else {
+            MM_CONFIG.pairs[market].lastPersistedPrice = MM_INDEPENDENT_CONFIG.pairs[market].lastPersistedPrice;
+        }
+    }
+}
+
 console.log('ACTIVE PAIRS', activePairs);
 
 // Start price feeds
@@ -118,7 +152,7 @@ async function handleMessage(json) {
             ORDER_BROADCASTING = false;
             break;
         case 'orders':
-            const orders = msg.args[0];
+            const [orders] = msg.args;
             orders.forEach(order => {
                 const orderid = order[1];
                 const fillable = isOrderFillable(order);
@@ -131,10 +165,9 @@ async function handleMessage(json) {
             });
             break;
         case 'userordermatch':
-            const chainid = msg.args[0];
-            const orderid = msg.args[1];
+            const [chainid, orderid, swapOffer, fillOrder] = msg.args;
             try {
-                await broadcastfill(chainid, orderid, msg.args[2], msg.args[3]);
+                await broadcastfill(chainid, orderid, swapOffer, fillOrder);
             } catch (e) {
                 console.error(e);
             }
@@ -186,7 +219,7 @@ function isOrderFillable(order) {
 
     let quote;
     try {
-        quote = genquote(chainid, market_id, side, baseQuantity);
+        quote = genQuote(chainid, market_id, side, baseQuantity);
     } catch (e) {
         return { fillable: false, reason: e.message };
     }
@@ -200,7 +233,7 @@ function isOrderFillable(order) {
     return { fillable: true, reason: null };
 }
 
-function genquote(chainid, market_id, side, baseQuantity) {
+function genQuote(chainid, market_id, side, baseQuantity) {
     const market = MARKETS[market_id];
     if (CHAIN_ID !== chainid) throw new Error('badchain');
     if (!market) throw new Error('badmarket');
@@ -231,15 +264,22 @@ function genquote(chainid, market_id, side, baseQuantity) {
 
 function validatePriceFeed(market_id) {
     const mmConfig = MM_CONFIG.pairs[market_id];
-    const mode = MM_CONFIG.pairs[market_id].mode || 'pricefeed';
-    const initPrice = MM_CONFIG.pairs[market_id].initPrice;
-    const primaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedPrimary;
-    const secondaryPriceFeedId = MM_CONFIG.pairs[market_id].priceFeedSecondary;
+    const mode = mmConfig.mode || MODE_PRICEFEED; // Default to pricefeed mode for configs that didnt get updated
+    const initPrice = mmConfig.initPrice;
+    const lastPersistedPrice = mmConfig.lastPersistedPrice;
+    const primaryPriceFeedId = mmConfig.priceFeedPrimary;
+    const secondaryPriceFeedId = mmConfig.priceFeedSecondary;
 
     // Constant mode checks
-    if (mode === 'constant') {
+    if (mode === MODE_CONSTANT) {
         if (initPrice) return true;
-        else throw new Error('No initPrice available');
+        else throw new Error('No initPrice available for constant mode');
+    }
+
+    // Independent mode checks
+    if (mode === MODE_INDEPENDENT) {
+        if (initPrice || lastPersistedPrice) return true;
+        else throw new Error('No initPrice available for independent mode');
     }
 
     // Check if primary price exists
@@ -262,7 +302,7 @@ function validatePriceFeed(market_id) {
     return true;
 }
 
-async function sendfillrequest(orderreceipt) {
+async function sendFillRequest(orderreceipt) {
     const chainId = orderreceipt[0];
     const orderId = orderreceipt[1];
     const market_id = orderreceipt[2];
@@ -272,7 +312,32 @@ async function sendfillrequest(orderreceipt) {
     const side = orderreceipt[3];
     const baseQuantity = orderreceipt[5];
     const quoteQuantity = orderreceipt[6];
-    const quote = genquote(chainId, market_id, side, baseQuantity);
+    const quote = genQuote(chainId, market_id, side, baseQuantity);
+
+    // Update persisted price data
+    if (MM_CONFIG.pairs[market_id].mode === MODE_INDEPENDENT) {
+        PRICE_FEEDS[market_id] = quote.quotePrice;
+
+        let independentMarketConfigData;
+        try {
+            const mmIndependentConfigFile = fs.readFileSync('independent-market-config.json', 'utf8');
+            independentMarketConfigData = JSON.parse(mmIndependentConfigFile);
+        } catch (error) {
+            // We found no data for independent markets. Generate a new skleton so we can persist successfully
+            independentMarketConfigData = {
+                pairs: {},
+            };
+        }
+
+        independentMarketConfigData.pairs[market_id].lastPersistedPrice = quote.quotePrice;
+        independentMarketConfigData.pairs[market_id].updateTimestamp = new Date().toISOString();
+        try {
+            fs.writeFileSync('independent-market-config.json', independentMarketConfigData, 'utf8');
+        } catch (error) {
+            throw new Error('failedToPersistPrice');
+        }
+    }
+
     let tokenSell, tokenBuy, sellQuantity, buyQuantity;
     if (side === 'b') {
         tokenSell = market.baseAssetId;
@@ -374,7 +439,7 @@ async function processFillQueue() {
     }
     const order = FILL_QUEUE.shift();
     try {
-        await sendfillrequest(order);
+        await sendFillRequest(order);
     } catch (e) {
         console.error(e);
         ORDER_BROADCASTING = false;
@@ -474,17 +539,20 @@ function indicateLiquidity(market_id) {
         }
     }
     const msg = { op: 'indicateliq2', args: [CHAIN_ID, market_id, liquidity, CLIENT_ID] };
+
     zigzagws.send(JSON.stringify(msg));
 }
 
 function getMidPrice(market_id) {
-    const mmConfig = MM_CONFIG.pairs[market_id];
-    const mode = mmConfig.mode || 'pricefeed';
+    const marketConfig = MM_CONFIG.pairs[market_id];
+    const mode = marketConfig.mode || MODE_PRICEFEED; // Default to pricefeed mode for configs that didn't get updated
     let midPrice;
-    if (mode == 'constant') {
-        midPrice = mmConfig.initPrice;
-    } else if (mode == 'pricefeed') {
-        midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+    if (mode === MODE_CONSTANT) {
+        midPrice = marketConfig.initPrice;
+    } else if (mode === MODE_PRICEFEED) {
+        midPrice = PRICE_FEEDS[marketConfig.priceFeedPrimary];
+    } else if (mode === MODE_INDEPENDENT) {
+        midPrice = PRICE_FEEDS[market_id] || marketConfig.lastPersistedPrice || marketConfig.initPrice; // Default to current price, and if not found use the last persisted price, and if not found use the initial price
     }
     return midPrice;
 }

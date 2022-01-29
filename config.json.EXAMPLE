@@ -4,6 +4,15 @@
     "zigzagChainId": 1,
     "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
     "pairs": {
+        "ZIGGY-USDC": {
+            "mode": "independent",
+            "initPrice": 1,
+            "slippageRate": 1e-9,
+            "maxSize": 100000,
+            "minSize": 1,
+            "minSpread": 0.0003,
+            "active": true
+        },
         "ETH-USDC": {
             "priceFeedPrimary": "cryptowatch:6631",
             "priceFeedSecondary": "cryptowatch:588",
