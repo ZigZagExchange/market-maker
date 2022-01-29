@@ -3,4 +3,3 @@ node_modules/
 config.json
 independent-market-config.json
 config/
-yarn.lock
