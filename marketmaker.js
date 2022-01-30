@@ -319,10 +319,8 @@ async function sendFillRequest(orderreceipt) {
         PRICE_FEEDS[market_id] = quote.quotePrice;
 
         let independentMarketConfigData;
-        try {
-            const mmIndependentConfigFile = fs.readFileSync('independent-market-config.json', 'utf8');
-            independentMarketConfigData = JSON.parse(mmIndependentConfigFile);
-        } catch (error) {
+
+        if (!MM_INDEPENDENT_CONFIG) {
             // We found no data for independent markets. Generate a new skleton so we can persist successfully
             independentMarketConfigData = {
                 pairs: {},
@@ -330,7 +328,7 @@ async function sendFillRequest(orderreceipt) {
         }
 
         independentMarketConfigData.pairs[market_id].lastPersistedPrice = quote.quotePrice;
-        independentMarketConfigData.pairs[market_id].updateTimestamp = new Date().toISOString();
+        independentMarketConfigData.pairs[market_id].updateTimestamp = new Date().getTime();
         try {
             fs.writeFileSync('independent-market-config.json', independentMarketConfigData, 'utf8');
         } catch (error) {
