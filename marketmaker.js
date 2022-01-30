@@ -35,7 +35,6 @@ console.log("ACTIVE PAIRS", activePairs);
 cryptowatchWsSetup();
 
 // Initiate fill loop
-let ORDER_BROADCASTING = false;
 const FILL_QUEUE = [];
 setTimeout(processFillQueue, 1000);
 
@@ -63,7 +62,8 @@ try {
       WALLETS[accountId] = {
         'ethWallet': ethWallet,
         'syncWallet': syncWallet,
-        'account_state': account_state
+        'account_state': account_state,
+        'ORDER_BROADCASTING': false,
       }
     }
 } catch (e) {
@@ -112,7 +112,9 @@ function onWsOpen() {
     
 function onWsClose () {
     console.log("Websocket closed. Restarting");
-    ORDER_BROADCASTING = false;
+    Object.keys(WALLETS).forEach(accountId => {
+        WALLETS[accountId]['ORDER_BROADCASTING'] = false;
+    }
     setTimeout(() => {
         clearInterval(fillOrdersInterval)
         clearInterval(indicateLiquidityInterval)
@@ -127,7 +129,9 @@ async function handleMessage(json) {
     if (!(["lastprice", "liquidity2"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
-            ORDER_BROADCASTING = false;
+            Object.keys(WALLETS).forEach(accountId => {
+                WALLETS[accountId]['ORDER_BROADCASTING'] = false;
+            }
             break;
         case 'orders':
             const orders = msg.args[0];
@@ -151,7 +155,10 @@ async function handleMessage(json) {
             } catch (e) {
                 console.error(e);
             }
-            ORDER_BROADCASTING = false;
+            const walletId = msg.args[3].fillOrder.accountId;
+            if(WALLETS[walletId]) { // first check if walletId from fillOrder is good
+                WALLETS[walletId]['ORDER_BROADCASTING'] = false;
+            }
             break
         default:
             break
@@ -285,7 +292,7 @@ function validatePriceFeed(market_id) {
     return true;
 }
 
-async function sendfillrequest(orderreceipt) {
+async function sendfillrequest(orderreceipt, accountId) {
   const chainId = orderreceipt[0];
   const orderId = orderreceipt[1];
   const market_id = orderreceipt[2];
@@ -326,10 +333,10 @@ async function sendfillrequest(orderreceipt) {
     ratio: zksync.utils.tokenRatio(tokenRatio),
     validUntil: one_min_expiry
   }
-  const fillOrder = await syncWallet.getOrder(orderDetails);
-    
-  // Set global flag 
-  ORDER_BROADCASTING = true;
+  const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
+
+  // Set wallet flag
+  WALLETS[accountId]['ORDER_BROADCASTING'] = true;
 
   const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
   zigzagws.send(JSON.stringify(resp));
@@ -342,9 +349,13 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
   if (nonce <= userNonce) {
       throw new Error("badnonce");
   }
+  const wallet = WALLETS[fillOrder.accountId];
+  if(!wallet) {
+      throw new Error("No wallet with this accountId: "+fillOrder.accountId);
+  }
   const randint = (Math.random()*1000).toFixed(0);
   console.time('syncswap' + randint);
-  const swap = await syncWallet.syncSwap({
+  const swap = await wallet['syncWallet'].syncSwap({
     orders: [swapOffer, fillOrder],
     feeToken: "ETH",
     nonce: fillOrder.nonce
