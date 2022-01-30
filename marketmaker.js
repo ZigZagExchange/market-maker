@@ -11,7 +11,7 @@ dotenv.config();
 const PRICE_FEEDS = {};
 const OPEN_ORDERS = {};
 const NONCES = {};
-let ACCOUNT_STATE = null;
+const WALLETS = {};
 
 // Load MM config
 let MM_CONFIG;
@@ -42,20 +42,29 @@ setTimeout(processFillQueue, 1000);
 // Connect to zksync
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
-let syncWallet, ethersProvider, syncProvider, ethWallet, 
-    fillOrdersInterval, indicateLiquidityInterval;
+let ethersProvider, syncProvider, fillOrdersInterval, indicateLiquidityInterval;
 ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
-    ethWallet = new ethers.Wallet(process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey);
-    syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
-    if (!(await syncWallet.isSigningKeySet())) {
-        console.log("setting sign key");
-        const signKeyResult = await syncWallet.setSigningKey({
-            feeToken: "ETH",
-            ethAuthType: "ECDSA",
-        });
-        console.log(signKeyResult);
+    const ethPrivKeys = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKeys)
+    for(let i=0; i<ethPrivKeys.length; i++) {
+      let ethWallet = new ethers.Wallet(ethPrivKeys[i]);
+      let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
+      if (!(await syncWallet.isSigningKeySet())) {
+          console.log("setting sign key");
+          const signKeyResult = await syncWallet.setSigningKey({
+              feeToken: "ETH",
+              ethAuthType: "ECDSA",
+          });
+          console.log(signKeyResult);
+      }
+      let accountId = await syncWallet.getAccountId();
+      let account_state = await syncWallet.getAccountState();
+      WALLETS[accountId] = {
+        'ethWallet': ethWallet,
+        'syncWallet': syncWallet,
+        'account_state': account_state
+      }
     }
 } catch (e) {
     console.log(e);
@@ -63,7 +72,6 @@ try {
 }
 
 // Update account state loop
-await updateAccountState();
 setInterval(updateAccountState, 30000);
 
 // Get markets info
@@ -168,7 +176,14 @@ function isOrderFillable(order) {
     const sellCurrency = (side === 's') ? market.quoteAsset.symbol : market.baseAsset.symbol;
     const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
     const sellQuantity = (side === 's') ? quoteQuantity : baseQuantity;
-    const balance = ACCOUNT_STATE.committed.balances[sellCurrency] / 10**sellDecimals;
+    let highestSellCurrency = 0;
+    Object.keys(WALLETS).forEach(accountId => {
+      const thisAccountSellCurrency =  WALLETS[accountId]['account_state'].committed.balances["ETH"];
+      if (highestSellCurrency < thisAccountSellCurrency) {
+          highestSellCurrency = thisAccountSellCurrency;
+      }
+    });
+    const balance = highestSellCurrency / 10**sellDecimals;
     const now = Date.now() / 1000 | 0;
 
     if (now > expires) {
@@ -466,8 +481,20 @@ function indicateLiquidity (market_id) {
     const midPrice = getMidPrice(market_id);
     const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
     const side = mmConfig.side || 'd';
-    const baseBalance = ACCOUNT_STATE.committed.balances[marketInfo.baseAsset.symbol] / 10**marketInfo.baseAsset.decimals;
-    const quoteBalance = ACCOUNT_STATE.committed.balances[marketInfo.quoteAsset.symbol] / 10**marketInfo.quoteAsset.decimals;
+
+    let baseBN = 0, quoteBN = 0;
+    Object.keys(WALLETS).forEach(accountId => {
+        const thisBase = WALLETS[accountId]['account_state'].committed.balances[marketInfo.baseAsset.symbol];
+        const thisQuote = WALLETS[accountId]['account_state'].committed.balances[marketInfo.quoteAsset.symbol];
+        if (baseBN < thisBase) {
+            baseBN = thisBase;
+        }
+        if (quoteBN < thisQuote) {
+            quoteBN = thisQuote;
+        }
+    }
+    const baseBalance = baseBN / 10**marketInfo.baseAsset.decimals;
+    const quoteBalance = quoteBN / 10**marketInfo.quoteAsset.decimals;
     const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
     const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
     if (!midPrice) return false;
@@ -502,5 +529,9 @@ function getMidPrice (market_id) {
 }
 
 async function updateAccountState() {
-    ACCOUNT_STATE = await syncWallet.getAccountState();
+    Object.keys(WALLETS).forEach(accountId => {
+        (WALLETS[accountId]['syncWallet']).getAccountState().then((state) => {
+            WALLETS[accountId]['account_state'] = state;
+        })
+    });
 }
