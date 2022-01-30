@@ -582,9 +582,9 @@ async function logBalance() {
         }));
 
         // log to CVS
-        const date = new Date().toISOString()
+        const date = new Date().toISOString();
         const content = date + ";" + sum.toFixed(2) + "\n";
-        fs.writeFile('price_csv.txt', content, { flag: 'a+' })
+        fs.writeFile('price_csv.txt', content, { flag: 'a+' }, err => {});
     } catch(err) {
       // pass
     }
