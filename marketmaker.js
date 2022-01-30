@@ -401,22 +401,27 @@ async function fillOpenOrders() {
 }
 
 async function processFillQueue() {
-    if (ORDER_BROADCASTING) {
-        setTimeout(processFillQueue, 100);
-        return false;
-    }
-    if (FILL_QUEUE.length === 0) {
-        setTimeout(processFillQueue, 100);
-        return false;
-    }
-    const order = FILL_QUEUE.shift();
-    try {
-        await sendfillrequest(order);
-    } catch (e) {
-        console.error(e);
-        ORDER_BROADCASTING = false;
-    }
-    setTimeout(processFillQueue, 50);
+    Object.keys(WALLETS).forEach(accountId => {
+        const wallet = WALLETS[accountId];
+        if (wallet['ORDER_BROADCASTING']) {
+            return;
+        }
+        if (FILL_QUEUE.length === 0) {
+            return;
+        }
+        let order
+        for(let i=0; i<FILL_QUEUE.length; i++) {
+          TODO pick order for this mm so he can fill - eg one wallet is low on USDC and cant fill those
+
+        }
+
+        try {
+            await sendfillrequest(order, accountId);
+        } catch (e) {
+            console.error(e);
+            wallet['ORDER_BROADCASTING'] = false;
+        }
+    setTimeout(processFillQueue, 100);
 }
 
 async function cryptowatchWsSetup() {
