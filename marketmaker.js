@@ -12,6 +12,8 @@ const PRICE_FEEDS = {};
 const OPEN_ORDERS = {};
 const NONCES = {};
 let ACCOUNT_STATE = null;
+let ORDER_BROADCASTING = false;
+const FILL_QUEUE = [];
 
 // Load MM config
 let MM_CONFIG;
@@ -35,8 +37,6 @@ console.log("ACTIVE PAIRS", activePairs);
 cryptowatchWsSetup();
 
 // Initiate fill loop
-let ORDER_BROADCASTING = false;
-const FILL_QUEUE = [];
 setTimeout(processFillQueue, 1000);
 
 // Connect to zksync
@@ -95,9 +95,7 @@ function onWsOpen() {
         if (MM_CONFIG.pairs[market].active) {
             indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 5000);
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
-            // There's a weird bug happening where even though the websocket is open the message isn't going through 
-            // so a time delay was set
-            setTimeout(() => zigzagws.send(JSON.stringify(msg)), 100);
+            zigzagws.send(JSON.stringify(msg));
         }
     }
 }
