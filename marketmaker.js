@@ -45,7 +45,7 @@ let ethersProvider, syncProvider, fillOrdersInterval, indicateLiquidityInterval;
 ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
-    const ethPrivKeys = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKeys)
+    const ethPrivKeys = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKeys);
     for(let i=0; i<ethPrivKeys.length; i++) {
       let ethWallet = new ethers.Wallet(ethPrivKeys[i]);
       let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
@@ -149,15 +149,16 @@ async function handleMessage(json) {
             const chainid = msg.args[0];
             const orderid = msg.args[1];
             const wallet = WALLETS[fillOrder.accountId];
-            if(wallet) {
-              try {
-                  await broadcastfill(chainid, orderid, msg.args[2], msg.args[3], wallet);
-                  wallet['ORDER_BROADCASTING'] = false;
-              } catch (e) {
-                  console.error(e);
-              }
+            if(!wallet) {
+                console.error("No wallet with this accountId: "+fillOrder.accountId);
+                break
             } else {
-              console.error("No wallet with this accountId: "+fillOrder.accountId);
+                try {
+                    await broadcastfill(chainid, orderid, msg.args[2], msg.args[3], wallet);
+                } catch (e) {
+                    console.error(e);
+                }
+                wallet['ORDER_BROADCASTING'] = false;
             }
             break
         default:
@@ -396,25 +397,29 @@ async function fillOpenOrders() {
 }
 
 async function processFillQueue() {
+    if (FILL_QUEUE.length === 0) {
+        setTimeout(processFillQueue, 100);
+        return;
+    }
     Object.keys(WALLETS).forEach(accountId => {
         const wallet = WALLETS[accountId];
         if (wallet['ORDER_BROADCASTING']) {
             return;
         }
-        if (FILL_QUEUE.length === 0) {
-            return;
+        let index = 0;
+        for(;index<FILL_QUEUE.length; index++) {
+            if(FILL_QUEUE[index].wallets.includes(accountId)) {
+                break;
+            }
         }
-        let order
-        for(let i=0; i<FILL_QUEUE.length; i++) {
-            if(FILL_QUEUE[i].wallets.includes(accountId)) {
-                const order = FILL_QUEUE.splice(i, 1);
-                try {
-                    await sendfillrequest(order.order, accountId);
-                    return;
-                } catch (e) {
-                    console.error(e);
-                    wallet['ORDER_BROADCASTING'] = false;
-                }
+        if (index < FILL_QUEUE.length) {
+            const order = FILL_QUEUE.splice(index, 1);
+            try {
+                await sendfillrequest(order.order, accountId);
+                return;
+            } catch (e) {
+                console.error(e);
+                wallet['ORDER_BROADCASTING'] = false;
             }
         }
     });
@@ -499,12 +504,8 @@ function indicateLiquidity (market_id) {
     Object.keys(WALLETS).forEach(accountId => {
         const thisBase = WALLETS[accountId]['account_state'].committed.balances[marketInfo.baseAsset.symbol];
         const thisQuote = WALLETS[accountId]['account_state'].committed.balances[marketInfo.quoteAsset.symbol];
-        if (baseBN < thisBase) {
-            baseBN = thisBase;
-        }
-        if (quoteBN < thisQuote) {
-            quoteBN = thisQuote;
-        }
+        baseBN = (baseBN < thisBase) ? thisBase : baseBN;
+        quoteBN = (quoteBN < thisQuote) ? thisQuote : quoteBN;
     }
     const baseBalance = baseBN / 10**marketInfo.baseAsset.decimals;
     const quoteBalance = quoteBN / 10**marketInfo.quoteAsset.decimals;
