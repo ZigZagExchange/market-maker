@@ -140,7 +140,7 @@ async function handleMessage(json) {
                 const fillable = isOrderFillable(order);
                 console.log(fillable);
                 if (fillable.fillable) {
-                    FILL_QUEUE.push(order);
+                    FILL_QUEUE.push({ order: order, wallets: fillable.wallets});
                 }
                 else if (fillable.reason === "badprice") {
                     OPEN_ORDERS[orderid] = order;
@@ -150,14 +150,16 @@ async function handleMessage(json) {
         case "userordermatch":
             const chainid = msg.args[0];
             const orderid = msg.args[1];
-            try {
-                await broadcastfill(chainid, orderid, msg.args[2], msg.args[3]);
-            } catch (e) {
-                console.error(e);
-            }
-            const walletId = msg.args[3].fillOrder.accountId;
-            if(WALLETS[walletId]) { // first check if walletId from fillOrder is good
-                WALLETS[walletId]['ORDER_BROADCASTING'] = false;
+            const wallet = WALLETS[fillOrder.accountId];
+            if(wallet) {
+              try {
+                  await broadcastfill(chainid, orderid, msg.args[2], msg.args[3], wallet);
+                  wallet['ORDER_BROADCASTING'] = false;
+              } catch (e) {
+                  console.error(e);
+              }
+            } else {
+              console.error("No wallet with this accountId: "+fillOrder.accountId);
             }
             break
         default:
@@ -183,14 +185,13 @@ function isOrderFillable(order) {
     const sellCurrency = (side === 's') ? market.quoteAsset.symbol : market.baseAsset.symbol;
     const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
     const sellQuantity = (side === 's') ? quoteQuantity : baseQuantity;
-    let highestSellCurrency = 0;
+    const neededBalanceBN = sellQuantity * 10**sellDecimals;
+    const goodWallets = [];
     Object.keys(WALLETS).forEach(accountId => {
-      const thisAccountSellCurrency =  WALLETS[accountId]['account_state'].committed.balances["ETH"];
-      if (highestSellCurrency < thisAccountSellCurrency) {
-          highestSellCurrency = thisAccountSellCurrency;
+      if (WALLETS[accountId]['account_state'].committed.balances[sellCurrency] > (neededBalanceBN * 1.05)) {
+          goodWallets.push(accountId);
       }
     });
-    const balance = highestSellCurrency / 10**sellDecimals;
     const now = Date.now() / 1000 | 0;
 
     if (now > expires) {
@@ -208,7 +209,7 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "badsize" };
     }
 
-    if (balance < sellQuantity) {
+    if (goodWallets.length === 0) {
         return { fillable: false, reason: "badbalance" };
     }
 
@@ -226,7 +227,7 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "badprice" };
     }
 
-    return { fillable: true, reason: null };
+    return { fillable: true, reason: null, wallets: goodWallets};
 }
 
 function genquote(chainid, market_id, side, baseQuantity) {
@@ -342,16 +343,12 @@ async function sendfillrequest(orderreceipt, accountId) {
   zigzagws.send(JSON.stringify(resp));
 }
 
-async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
+async function broadcastfill(chainid, orderid, swapOffer, fillOrder, wallet) {
   // Nonce check
   const nonce = swapOffer.nonce;
   const userNonce = NONCES[swapOffer.accountId];
   if (nonce <= userNonce) {
       throw new Error("badnonce");
-  }
-  const wallet = WALLETS[fillOrder.accountId];
-  if(!wallet) {
-      throw new Error("No wallet with this accountId: "+fillOrder.accountId);
   }
   const randint = (Math.random()*1000).toFixed(0);
   console.time('syncswap' + randint);
@@ -391,7 +388,7 @@ async function fillOpenOrders() {
         const order = OPEN_ORDERS[orderid];
         const fillable = isOrderFillable(order);
         if (fillable.fillable) {
-            FILL_QUEUE.push(order);
+            FILL_QUEUE.push({ order: order, wallets: fillable.wallets});
             delete OPEN_ORDERS[orderid];
         }
         else if (fillable.reason !== "badprice") {
@@ -411,16 +408,18 @@ async function processFillQueue() {
         }
         let order
         for(let i=0; i<FILL_QUEUE.length; i++) {
-          TODO pick order for this mm so he can fill - eg one wallet is low on USDC and cant fill those
-
+            if(FILL_QUEUE[i].wallets.includes(accountId)) {
+                const order = FILL_QUEUE.splice(i, 1);
+                try {
+                    await sendfillrequest(order.order, accountId);
+                    return;
+                } catch (e) {
+                    console.error(e);
+                    wallet['ORDER_BROADCASTING'] = false;
+                }
+            }
         }
-
-        try {
-            await sendfillrequest(order, accountId);
-        } catch (e) {
-            console.error(e);
-            wallet['ORDER_BROADCASTING'] = false;
-        }
+    });
     setTimeout(processFillQueue, 100);
 }
 
