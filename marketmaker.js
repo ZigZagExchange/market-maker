@@ -74,6 +74,10 @@ try {
 // Update account state loop
 setInterval(updateAccountState, 30000);
 
+// Log mm balance over all accounts
+logBalance();
+setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
+
 // Get markets info
 const activePairsText = activePairs.join(',');
 const markets_url = `https://zigzag-markets.herokuapp.com/markets?chainid=${CHAIN_ID}&id=${activePairsText}`
@@ -543,9 +547,45 @@ function getMidPrice (market_id) {
 }
 
 async function updateAccountState() {
-    Object.keys(WALLETS).forEach(accountId => {
-        (WALLETS[accountId]['syncWallet']).getAccountState().then((state) => {
-            WALLETS[accountId]['account_state'] = state;
-        })
-    });
+    try {
+        Object.keys(WALLETS).forEach(accountId => {
+            (WALLETS[accountId]['syncWallet']).getAccountState().then((state) => {
+                WALLETS[accountId]['account_state'] = state;
+            })
+        });
+    } catch(err) {
+      // pass
+    }
+}
+
+async function logBalance() {
+    try {
+        await updateAccountState();
+        // fetch all balances over all wallets per token
+        const balance = {};
+        Object.keys(WALLETS).forEach(accountId => {
+            const committedBalaces = WALLETS[accountId]['account_state'].committed.balances;
+            Object.keys(committedBalaces).forEach(token => {
+                if(balance[token]) {
+                balance[token] = balance[token] + parseInt(committedBalaces[token]);
+              } else {
+                  balance[token] = parseInt(committedBalaces[token]);
+              }
+            });
+        });
+        // get token price and total in USD
+        let sum = 0;
+        await Promise.all(Object.keys(balance).map(async token => {
+            const price = await syncProvider.getTokenPrice(token.toString());
+            const tokenNumber = await syncProvider.tokenSet.formatToken(token, balance[token].toString())
+            sum = sum + price * tokenNumber;
+        }));
+
+        // log to CVS
+        const date = new Date().toISOString()
+        const content = date + ";" + sum.toFixed(2) + "\n";
+        fs.writeFile('price_csv.txt', content, { flag: 'a+' })
+    } catch(err) {
+      // pass
+    }
 }
