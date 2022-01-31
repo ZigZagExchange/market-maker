@@ -116,7 +116,7 @@ function onWsClose () {
     console.log("Websocket closed. Restarting");
     Object.keys(WALLETS).forEach(accountId => {
         WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-    }
+    });
     setTimeout(() => {
         clearInterval(fillOrdersInterval)
         clearInterval(indicateLiquidityInterval)
@@ -133,7 +133,7 @@ async function handleMessage(json) {
         case 'error':
             Object.keys(WALLETS).forEach(accountId => {
                 WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-            }
+            });
             break;
         case 'orders':
             const orders = msg.args[0];
@@ -152,13 +152,14 @@ async function handleMessage(json) {
         case "userordermatch":
             const chainid = msg.args[0];
             const orderid = msg.args[1];
+            const fillOrder = msg.args[3];
             const wallet = WALLETS[fillOrder.accountId];
             if(!wallet) {
                 console.error("No wallet with this accountId: "+fillOrder.accountId);
                 break
             } else {
                 try {
-                    await broadcastfill(chainid, orderid, msg.args[2], msg.args[3], wallet);
+                    await broadcastfill(chainid, orderid, msg.args[2], fillOrder, wallet);
                 } catch (e) {
                     console.error(e);
                 }
@@ -405,7 +406,7 @@ async function processFillQueue() {
         setTimeout(processFillQueue, 100);
         return;
     }
-    Object.keys(WALLETS).forEach(accountId => {
+    await Promise.all(Object.keys(WALLETS).map(async accountId => {
         const wallet = WALLETS[accountId];
         if (wallet['ORDER_BROADCASTING']) {
             return;
@@ -417,16 +418,16 @@ async function processFillQueue() {
             }
         }
         if (index < FILL_QUEUE.length) {
-            const order = FILL_QUEUE.splice(index, 1);
+            const selectedOrder = FILL_QUEUE.splice(index, 1);
             try {
-                await sendfillrequest(order.order, accountId);
+                await sendfillrequest(selectedOrder[0].order, accountId);
                 return;
             } catch (e) {
                 console.error(e);
                 wallet['ORDER_BROADCASTING'] = false;
             }
         }
-    });
+    }));
     setTimeout(processFillQueue, 100);
 }
 
@@ -510,7 +511,7 @@ function indicateLiquidity (market_id) {
         const thisQuote = WALLETS[accountId]['account_state'].committed.balances[marketInfo.quoteAsset.symbol];
         baseBN = (baseBN < thisBase) ? thisBase : baseBN;
         quoteBN = (quoteBN < thisQuote) ? thisQuote : quoteBN;
-    }
+    });
     const baseBalance = baseBN / 10**marketInfo.baseAsset.decimals;
     const quoteBalance = quoteBN / 10**marketInfo.quoteAsset.decimals;
     const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
