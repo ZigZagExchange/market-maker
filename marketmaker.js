@@ -20,7 +20,6 @@ const MODE_INDEPENDENT = 'independent';
 const MODE_PRICEFEED = 'pricefeed';
 
 let MM_INDEPENDENT_CONFIG;
-let MM_INDEPENDENT_CONFIG_CREATED = false;
 let ACCOUNT_STATE = null;
 let MM_CONFIG;
 
@@ -317,25 +316,30 @@ async function sendFillRequest(orderreceipt) {
     const quoteQuantity = orderreceipt[6];
     const quote = genQuote(chainId, market_id, side, baseQuantity);
 
+    console.log(`market_id: ${market_id}`);
     // Update persisted price data
     if (MM_CONFIG.pairs[market_id].mode === MODE_INDEPENDENT) {
         PRICE_FEEDS[market_id] = quote.quotePrice;
 
         let independentMarketConfigData;
 
-        if (!MM_INDEPENDENT_CONFIG && !MM_INDEPENDENT_CONFIG_CREATED) {
+        if (!MM_INDEPENDENT_CONFIG) {
             // We found no data for independent markets. Generate a new skleton so we can persist successfully
             independentMarketConfigData = {
                 pairs: {},
             };
+        } else {
+            independentMarketConfigData = MM_INDEPENDENT_CONFIG;
         }
 
+        independentMarketConfigData.pairs[market_id] = {};
         independentMarketConfigData.pairs[market_id].lastPersistedPrice = quote.quotePrice;
         independentMarketConfigData.pairs[market_id].updateTimestamp = new Date().getTime();
         try {
-            fs.writeFileSync('independent-market-config.json', independentMarketConfigData, 'utf8');
-            MM_INDEPENDENT_CONFIG_CREATED = true;
+            fs.writeFileSync('independent-market-config.json', JSON.stringify(independentMarketConfigData), 'utf8');
+            MM_INDEPENDENT_CONFIG = independentMarketConfigData;
         } catch (error) {
+            throw error;
             throw new Error('failedToPersistPrice');
         }
     }
