@@ -19,8 +19,12 @@ const MODE_CONSTANT = 'constant';
 const MODE_INDEPENDENT = 'independent';
 const MODE_PRICEFEED = 'pricefeed';
 
-// Load MM config
+let MM_INDEPENDENT_CONFIG;
+let MM_INDEPENDENT_CONFIG_CREATED = false;
+let ACCOUNT_STATE = null;
 let MM_CONFIG;
+
+// Load MM config
 if (process.env.MM_CONFIG) {
     MM_CONFIG = JSON.parse(process.env.MM_CONFIG);
 } else {
@@ -35,7 +39,6 @@ for (let marketId in MM_CONFIG.pairs) {
     }
 }
 
-let MM_INDEPENDENT_CONFIG;
 // Load independent mode prices if present
 
 if (process.env.MM_INDEPENDENT_CONFIG) {
@@ -320,7 +323,7 @@ async function sendFillRequest(orderreceipt) {
 
         let independentMarketConfigData;
 
-        if (!MM_INDEPENDENT_CONFIG) {
+        if (!MM_INDEPENDENT_CONFIG && !MM_INDEPENDENT_CONFIG_CREATED) {
             // We found no data for independent markets. Generate a new skleton so we can persist successfully
             independentMarketConfigData = {
                 pairs: {},
@@ -331,6 +334,7 @@ async function sendFillRequest(orderreceipt) {
         independentMarketConfigData.pairs[market_id].updateTimestamp = new Date().getTime();
         try {
             fs.writeFileSync('independent-market-config.json', independentMarketConfigData, 'utf8');
+            MM_INDEPENDENT_CONFIG_CREATED = true;
         } catch (error) {
             throw new Error('failedToPersistPrice');
         }
