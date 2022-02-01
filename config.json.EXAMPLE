@@ -77,7 +77,7 @@
             "active": true
         },
         "DAI-USDT": {
-            "priceFeedPrimary": "cryptowatch:63349",
+            "priceFeedPrimary": "cryptowatch:61475",
             "priceFeedSecondary": null,
             "slippageRate": 1e-9,
             "maxSize": 100000,
