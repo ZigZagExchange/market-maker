@@ -14,6 +14,7 @@ const NONCES = {};
 let ACCOUNT_STATE = null;
 let ORDER_BROADCASTING = false;
 const FILL_QUEUE = [];
+let ORDER_LIST = [];
 
 const MODE_CONSTANT = 'constant';
 const MODE_INDEPENDENT = 'independent';
@@ -316,34 +317,6 @@ async function sendFillRequest(orderreceipt) {
     const quoteQuantity = orderreceipt[6];
     const quote = genQuote(chainId, market_id, side, baseQuantity);
 
-    console.log(`market_id: ${market_id}`);
-    // Update persisted price data
-    if (MM_CONFIG.pairs[market_id].mode === MODE_INDEPENDENT) {
-        PRICE_FEEDS[market_id] = quote.quotePrice;
-
-        let independentMarketConfigData;
-
-        if (!MM_INDEPENDENT_CONFIG) {
-            // We found no data for independent markets. Generate a new skleton so we can persist successfully
-            independentMarketConfigData = {
-                pairs: {},
-            };
-        } else {
-            independentMarketConfigData = MM_INDEPENDENT_CONFIG;
-        }
-
-        independentMarketConfigData.pairs[market_id] = {};
-        independentMarketConfigData.pairs[market_id].lastPersistedPrice = quote.quotePrice;
-        independentMarketConfigData.pairs[market_id].updateTimestamp = new Date().getTime();
-        try {
-            fs.writeFileSync('independent-market-config.json', JSON.stringify(independentMarketConfigData), 'utf8');
-            MM_INDEPENDENT_CONFIG = independentMarketConfigData;
-        } catch (error) {
-            throw error;
-            throw new Error('failedToPersistPrice');
-        }
-    }
-
     let tokenSell, tokenBuy, sellQuantity, buyQuantity;
     if (side === 'b') {
         tokenSell = market.baseAssetId;
@@ -378,6 +351,16 @@ async function sendFillRequest(orderreceipt) {
 
     const resp = { op: 'fillrequest', args: [chainId, orderId, fillOrder] };
     zigzagws.send(JSON.stringify(resp));
+
+    ORDER_LIST = rememberOrderUntil(
+        {
+            orderId,
+            marketId: market_id,
+            quotePrice: quote.quotePrice,
+        },
+        one_min_expiry,
+        JSON.parse(JSON.stringify(ORDER_LIST)) // do not use same array
+    );
 }
 
 async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
@@ -419,6 +402,13 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
     const error = success ? null : swap.error.toString();
     const ordercommitmsg = { op: 'orderstatusupdate', args: [[[chainid, orderid, newstatus, txhash, error]]] };
     zigzagws.send(JSON.stringify(ordercommitmsg));
+
+    if (success) {
+        const { marketId, quotePrice } = getOrderById(orderId, ORDER_LIST);
+        if (marketId && quotePrice) {
+            persistIndependentPairPrices(marketId, quotePrice);
+        }
+    }
 }
 
 async function fillOpenOrders() {
@@ -561,6 +551,60 @@ function getMidPrice(market_id) {
         midPrice = PRICE_FEEDS[market_id] || marketConfig.lastPersistedPrice || marketConfig.initPrice; // Default to current price, and if not found use the last persisted price, and if not found use the initial price
     }
     return midPrice;
+}
+
+function rememberOrderUntil(order, expiry, orderList) {
+    const newOrderList = orderList
+        .filter(storedOrder => {
+            if (new Date().getTime() > storedOrder.expiryTime) {
+                return false;
+            }
+        })
+        .concat({ orderId: order.id, expiry });
+    orderList = newOrderList;
+    return orderList;
+}
+
+function getOrderById(orderId, orderList) {
+    var orderIndex = orderList
+        .map(storedOrder => {
+            return storedOrder.orderId;
+        })
+        .indexOf(orderId);
+
+    const [order] = orderList.splice(orderIndex, 1);
+    return order;
+}
+
+function persistIndependentPairPrices(marketId, quotePrice) {
+    console.log(`market_id: ${marketId}`);
+    // Update persisted price data
+    if (MM_CONFIG.pairs[marketId].mode === MODE_INDEPENDENT) {
+        PRICE_FEEDS[marketId] = quotePrice;
+
+        let independentMarketConfigData;
+
+        if (!MM_INDEPENDENT_CONFIG) {
+            // We found no data for independent markets. Generate a new skleton so we can persist successfully
+            independentMarketConfigData = {
+                pairs: {},
+            };
+        } else {
+            independentMarketConfigData = MM_INDEPENDENT_CONFIG;
+        }
+
+        independentMarketConfigData.pairs[marketId] = {
+            lastPersistedPrice: quotePrice,
+            updateTimestamp: new Date().getTime(),
+        };
+
+        try {
+            fs.writeFileSync('independent-market-config.json', JSON.stringify(independentMarketConfigData), 'utf8');
+            MM_INDEPENDENT_CONFIG = independentMarketConfigData;
+        } catch (error) {
+            throw new Error('failedToPersistPrice');
+        }
+    }
 }
 
 async function updateAccountState() {
