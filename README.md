@@ -73,6 +73,20 @@ A market can be set inactive by flipping the active switch to `false`.
 
 ## Pair Setting Examples 
 
+Independent price:
+```
+"FOO-USDC": {
+    "mode": "independent",
+    "initPrice": 1,
+    "slippageRate": 1e-9,
+    "maxSize": 100000,
+    "minSize": 0.001,
+    "minSpread": 0.0003,
+    "active": true
+},
+```
+
+
 Stable-Stable constant price:
 
 ```
