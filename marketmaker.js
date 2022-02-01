@@ -45,7 +45,15 @@ let ethersProvider, syncProvider, fillOrdersInterval, indicateLiquidityInterval;
 ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
-    const ethPrivKeys = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKeys);
+    const keys = [];
+    const ethPrivKey = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey);
+    if(ethPrivKey) { keys.push(ethPrivKey);  }
+    const ethPrivKeys = (process.env.ETH_PRIVKEYS || MM_CONFIG.ethPrivKeys);
+    if(ethPrivKeys && ethPrivKeys.length > 0) {
+      ethPrivKeys.forEach( key => {
+        keys.push(key);
+      });
+    }
     for(let i=0; i<ethPrivKeys.length; i++) {
       let ethWallet = new ethers.Wallet(ethPrivKeys[i]);
       let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
