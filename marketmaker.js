@@ -554,13 +554,15 @@ function getMidPrice(market_id) {
 }
 
 function rememberOrderUntil(order, expiry, orderList) {
+    const { orderId, marketId, quotePrice } = order;
     const newOrderList = orderList
         .filter(storedOrder => {
             if (new Date().getTime() > storedOrder.expiryTime) {
                 return false;
             }
         })
-        .concat({ orderId: order.id, expiry });
+
+        .concat({ orderId, marketId, quotePrice, expiry });
     orderList = newOrderList;
     return orderList;
 }
@@ -577,7 +579,7 @@ function getOrderById(orderId, orderList) {
 }
 
 function persistIndependentPairPrices(marketId, quotePrice) {
-    console.log(`market_id: ${marketId}`);
+    console.log(`Persisting new price for ${marketId}: ${quotePrice}`);
     // Update persisted price data
     if (MM_CONFIG.pairs[marketId].mode === MODE_INDEPENDENT) {
         PRICE_FEEDS[marketId] = quotePrice;
