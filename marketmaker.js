@@ -11,17 +11,17 @@ dotenv.config();
 const PRICE_FEEDS = {};
 const OPEN_ORDERS = {};
 const NONCES = {};
-let ACCOUNT_STATE = null;
-let ORDER_BROADCASTING = false;
 const FILL_QUEUE = [];
-let ORDER_LIST = [];
 
 const MODE_CONSTANT = 'constant';
 const MODE_INDEPENDENT = 'independent';
 const MODE_PRICEFEED = 'pricefeed';
 
-let MM_INDEPENDENT_CONFIG;
+let ORDER_LIST = [];
 let ACCOUNT_STATE = null;
+let ORDER_BROADCASTING = false;
+
+let MM_INDEPENDENT_CONFIG;
 let MM_CONFIG;
 
 // Load MM config
