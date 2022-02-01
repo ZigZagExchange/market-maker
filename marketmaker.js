@@ -47,15 +47,17 @@ try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
     const keys = [];
     const ethPrivKey = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey);
-    if(ethPrivKey) { keys.push(ethPrivKey);  }
+    if(ethPrivKey && ethPrivKey != "") { keys.push(ethPrivKey);  }
     const ethPrivKeys = (process.env.ETH_PRIVKEYS || MM_CONFIG.ethPrivKeys);
     if(ethPrivKeys && ethPrivKeys.length > 0) {
-      ethPrivKeys.forEach( key => {
-        keys.push(key);
-      });
+        ethPrivKeys.forEach( key => {
+            if(key != "" && !keys.includes(key)) {
+                keys.push(key);
+            }
+        });
     }
-    for(let i=0; i<ethPrivKeys.length; i++) {
-      let ethWallet = new ethers.Wallet(ethPrivKeys[i]);
+    for(let i=0; i<keys.length; i++) {
+      let ethWallet = new ethers.Wallet(keys[i]);
       let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
       if (!(await syncWallet.isSigningKeySet())) {
           console.log("setting sign key");
