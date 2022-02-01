@@ -404,7 +404,7 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder) {
     zigzagws.send(JSON.stringify(ordercommitmsg));
 
     if (success) {
-        const { marketId, quotePrice } = getOrderById(orderId, ORDER_LIST);
+        const { marketId, quotePrice } = getOrderById(orderid, ORDER_LIST);
         if (marketId && quotePrice) {
             persistIndependentPairPrices(marketId, quotePrice);
         }
