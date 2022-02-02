@@ -291,6 +291,7 @@ function validatePriceFeed(market_id) {
     const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
     if (!primaryPrice) throw new Error("Primary price feed unavailable");
     
+
     // If there is no secondary price feed, the price auto-validates
     if (!secondaryPriceFeedId) return true;
 
