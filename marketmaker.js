@@ -114,7 +114,7 @@ function onWsClose () {
 
 async function handleMessage(json) {
     const msg = JSON.parse(json);
-    if (!(["lastprice", "liquidity2"]).includes(msg.op)) console.log(json.toString());
+    if (!(["lastprice", "liquidity2", "fillstatus"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
             ORDER_BROADCASTING = false;
@@ -456,19 +456,23 @@ function indicateLiquidity (market_id) {
     try {
         validatePriceFeed(market_id);
     } catch(e) {
+        console.error("Can not indicateLiquidity because: " + e);
         return false;
     }
 
     const marketInfo = MARKETS[market_id];
+    if (!marketInfo) return false;
+
     const mmConfig = MM_CONFIG.pairs[market_id];
     const midPrice = getMidPrice(market_id);
+    if (!midPrice) return false;
+
     const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
     const side = mmConfig.side || 'd';
     const baseBalance = ACCOUNT_STATE.committed.balances[marketInfo.baseAsset.symbol] / 10**marketInfo.baseAsset.decimals;
     const quoteBalance = ACCOUNT_STATE.committed.balances[marketInfo.quoteAsset.symbol] / 10**marketInfo.quoteAsset.decimals;
     const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
     const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
-    if (!midPrice) return false;
 
     const splits = 10;
     const liquidity = [];
