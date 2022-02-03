@@ -35,9 +35,6 @@ console.log("ACTIVE PAIRS", activePairs);
 // Start price feeds
 cryptowatchWsSetup();
 
-// Initiate fill loop
-setTimeout(processFillQueue, 1000);
-
 // Connect to zksync
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
@@ -87,6 +84,9 @@ setInterval(updateAccountState, 30000);
 // Log mm balance over all accounts
 logBalance();
 setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
+
+// Initiate fill loop
+setTimeout(processFillQueue, 1000);
 
 // Get markets info
 const activePairsText = activePairs.join(',');
