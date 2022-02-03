@@ -14,6 +14,7 @@ const NONCES = {};
 let ACCOUNT_STATE = null;
 let ORDER_BROADCASTING = false;
 const FILL_QUEUE = [];
+const MARKETS = {};
 
 // Load MM config
 let MM_CONFIG;
@@ -65,23 +66,6 @@ try {
 // Update account state loop
 await updateAccountState();
 setInterval(updateAccountState, 30000);
-
-// Get markets info
-const activePairsText = activePairs.join(',');
-const markets_url = `https://zigzag-markets.herokuapp.com/markets?chainid=${CHAIN_ID}&id=${activePairsText}`
-const markets = await fetch(markets_url).then(r => r.json());
-if (markets.error) {
-    console.error(markets);
-    throw new Error(markets.error);
-}
-const MARKETS = {};
-for (let i in markets) {
-    const market = markets[i];
-    MARKETS[market.id] = market;
-    if (market.alias) {
-        MARKETS[market.alias] = market;
-    }
-}
 
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
@@ -142,6 +126,10 @@ async function handleMessage(json) {
                 console.error(e);
             }
             ORDER_BROADCASTING = false;
+            break
+        case "marketinfo":
+            const market_info = msg.args[0];
+            MARKETS[market_info.alias] = market_info;
             break
         default:
             break
@@ -456,7 +444,7 @@ function indicateLiquidity (market_id) {
     try {
         validatePriceFeed(market_id);
     } catch(e) {
-        console.error("Can not indicateLiquidity because: " + e);
+        console.error("Can not indicateLiquidity ("+market_id+") because: " + e);
         return false;
     }
 
