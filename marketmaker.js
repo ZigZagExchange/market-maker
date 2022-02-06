@@ -46,7 +46,13 @@ try {
     const keys = [];
     const ethPrivKey = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey);
     if(ethPrivKey && ethPrivKey != "") { keys.push(ethPrivKey);  }
-    const ethPrivKeys = (process.env.ETH_PRIVKEYS || MM_CONFIG.ethPrivKeys);
+    let ethPrivKeys;
+    if (process.env.ETH_PRIVKEYS) {
+        ethPrivKeys = JSON.parse(process.env.ETH_PRIVKEYS);
+    }
+    else {
+        ethPrivKeys = MM_CONFIG.ethPrivKeys;
+    }
     if(ethPrivKeys && ethPrivKeys.length > 0) {
         ethPrivKeys.forEach( key => {
             if(key != "" && !keys.includes(key)) {
