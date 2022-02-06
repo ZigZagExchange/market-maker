@@ -22,6 +22,8 @@ Copy the `config.json.EXAMPLE` file to `config.json` to get started.
 
 Set your `eth_privkey` to be able to relay transactions. The ETH address with that private key should be loaded up with adequate funds for market making.
 
+Currently zkSync needs around 5 seconds to process a single swap and generate the receipt. So  there is a upper limit of 12 swaps per wallet per minute. To circumvent this, there is also the option to use the `eth_privkeys` array. Here you can add any number of private keys. Each should be loaded up with adequate funds for market making. The founds will be handled separately, therefor each additional wallet has the opportunity to process (at least) 12 more swaps per minute.
+
 For now, you need a Cryptowatch API key to use the market maker. Once you obtain one, you can set the `cryptowatchApiKey` field in `config.json`.
 
 To run the marketmaker:
