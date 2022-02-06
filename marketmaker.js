@@ -14,6 +14,7 @@ const NONCES = {};
 let ACCOUNT_STATE = null;
 let ORDER_BROADCASTING = false;
 const FILL_QUEUE = [];
+const FILLS = [];
 
 // Load MM config
 let MM_CONFIG;
@@ -34,7 +35,7 @@ for (let marketId in MM_CONFIG.pairs) {
 console.log("ACTIVE PAIRS", activePairs);
 
 // Start price feeds
-cryptowatchWsSetup();
+priceFeedSetup();
 
 // Initiate fill loop
 setTimeout(processFillQueue, 1000);
@@ -109,7 +110,7 @@ function onWsClose () {
         zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
         zigzagws.on('open', onWsOpen);
         zigzagws.on('error', onWsClose);
-    }, 5000);
+    }, 10000);
 }
 
 async function handleMessage(json) {
@@ -133,11 +134,21 @@ async function handleMessage(json) {
                 }
             });
             break
+        case "fills":
+            const fills = msg.args[0];
+            fills.forEach(fill => {
+                if (ACCOUNT_STATE.id.toString() === fill[
+            });
+            break
+        case "orderstatus":
+            break
         case "userordermatch":
             const chainid = msg.args[0];
             const orderid = msg.args[1];
+            const zkTaker = msg.args[2];
+            const zkMaker = msg.args[3];
             try {
-                await broadcastfill(chainid, orderid, msg.args[2], msg.args[3]);
+                await broadcastfill(chainid, orderid, zkTaker, zkMaker);
             } catch (e) {
                 console.error(e);
             }
@@ -391,13 +402,16 @@ async function processFillQueue() {
     setTimeout(processFillQueue, 50);
 }
 
-async function cryptowatchWsSetup() {
+async function priceFeedSetup() {
     const cryptowatch_market_ids = [];
     for (let market in MM_CONFIG.pairs) {
-        const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
-        const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
-        if (primaryPriceFeed) cryptowatch_market_ids.push(primaryPriceFeed);
-        if (secondaryPriceFeed) cryptowatch_market_ids.push(secondaryPriceFeed);
+        const mmConfig = MM_CONFIG.pairs[market];
+        if (mmConfig.priceFeedPrimary) cryptowatch_market_ids.push(mmConfig.priceFeedPrimary);
+        if (mmConfig.priceFeedSecondary) cryptowatch_market_ids.push(mmConfig.priceFeedSecondary);
+        if ((["independent", "constant"]).includes(mmConfig.mode)) {
+            if (!mmConfig.initPrice) throw new Error("Constant and independent mode must have an initPrice");
+            PRICE_FEEDS[market] = mmConfig.initPrice;
+        }
     }
 
     // Set initial prices
@@ -490,8 +504,8 @@ function getMidPrice (market_id) {
     const mmConfig = MM_CONFIG.pairs[market_id];
     const mode = mmConfig.mode || "pricefeed";
     let midPrice;
-    if (mode == "constant") {
-        midPrice = mmConfig.initPrice;
+    if (mode == "constant" || mode == "independent") {
+        midPrice = PRICE_FEEDS[market_id];
     }
     else if (mode == "pricefeed") {
         midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
