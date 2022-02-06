@@ -98,7 +98,6 @@ if (markets.error) {
     console.error(markets);
     throw new Error(markets.error);
 }
-const MARKETS = {};
 for (let i in markets) {
     const market = markets[i];
     MARKETS[market.id] = market;
