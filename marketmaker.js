@@ -532,15 +532,19 @@ function indicateLiquidity (market_id) {
     const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
     const side = mmConfig.side || 'd';
 
-    let baseBN = 0, quoteBN = 0;
+    let maxBaseBalance = 0, maxQuoteBalance = 0;
     Object.keys(WALLETS).forEach(accountId => {
-        const thisBase = WALLETS[accountId]['account_state'].committed.balances[marketInfo.baseAsset.symbol];
-        const thisQuote = WALLETS[accountId]['account_state'].committed.balances[marketInfo.quoteAsset.symbol];
-        baseBN = (baseBN < thisBase) ? thisBase : baseBN;
-        quoteBN = (quoteBN < thisQuote) ? thisQuote : quoteBN;
+        const walletBase = WALLETS[accountId]['account_state'].committed.balances[marketInfo.baseAsset.symbol];
+        const walletQuote = WALLETS[accountId]['account_state'].committed.balances[marketInfo.quoteAsset.symbol];
+        if (Number(walletBase) > maxBaseBalance) {
+            maxBaseBalance = walletBase;
+        }
+        if (Number(walletQuote) > maxQuoteBalance) {
+            maxQuoteBalance = walletQuote;
+        }
     });
-    const baseBalance = baseBN / 10**marketInfo.baseAsset.decimals;
-    const quoteBalance = quoteBN / 10**marketInfo.quoteAsset.decimals;
+    const baseBalance = maxBaseBalance / 10**marketInfo.baseAsset.decimals;
+    const quoteBalance = maxQuoteBalance / 10**marketInfo.quoteAsset.decimals;
     const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
     const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
 
