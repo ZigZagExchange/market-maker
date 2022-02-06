@@ -13,6 +13,7 @@ const OPEN_ORDERS = {};
 const NONCES = {};
 const WALLETS = {};
 const FILL_QUEUE = [];
+const MARKETS = {};
 
 // Load MM config
 let MM_CONFIG;
@@ -81,6 +82,7 @@ try {
 // Update account state loop
 setInterval(updateAccountState, 30000);
 
+
 // Log mm balance over all accounts
 logBalance();
 setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
@@ -138,7 +140,7 @@ function onWsClose () {
 
 async function handleMessage(json) {
     const msg = JSON.parse(json);
-    if (!(["lastprice", "liquidity2"]).includes(msg.op)) console.log(json.toString());
+    if (!(["lastprice", "liquidity2", "fillstatus"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
             Object.keys(WALLETS).forEach(accountId => {
@@ -175,6 +177,10 @@ async function handleMessage(json) {
                 }
                 wallet['ORDER_BROADCASTING'] = false;
             }
+            break
+        case "marketinfo":
+            const market_info = msg.args[0];
+            MARKETS[market_info.alias] = market_info;
             break
         default:
             break
@@ -507,12 +513,17 @@ function indicateLiquidity (market_id) {
     try {
         validatePriceFeed(market_id);
     } catch(e) {
+        console.error("Can not indicateLiquidity ("+market_id+") because: " + e);
         return false;
     }
 
     const marketInfo = MARKETS[market_id];
+    if (!marketInfo) return false;
+
     const mmConfig = MM_CONFIG.pairs[market_id];
     const midPrice = getMidPrice(market_id);
+    if (!midPrice) return false;
+
     const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
     const side = mmConfig.side || 'd';
 
@@ -527,7 +538,6 @@ function indicateLiquidity (market_id) {
     const quoteBalance = quoteBN / 10**marketInfo.quoteAsset.decimals;
     const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
     const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
-    if (!midPrice) return false;
 
     const splits = 10;
     const liquidity = [];
