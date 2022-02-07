@@ -96,22 +96,6 @@ setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
 // Initiate fill loop
 setTimeout(processFillQueue, 1000);
 
-// Get markets info
-const activePairsText = activePairs.join(',');
-const markets_url = `https://zigzag-markets.herokuapp.com/markets?chainid=${CHAIN_ID}&id=${activePairsText}`
-const markets = await fetch(markets_url).then(r => r.json());
-if (markets.error) {
-    console.error(markets);
-    throw new Error(markets.error);
-}
-for (let i in markets) {
-    const market = markets[i];
-    MARKETS[market.id] = market;
-    if (market.alias) {
-        MARKETS[market.alias] = market;
-    }
-}
-
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
 zigzagws.on('error', console.error);
@@ -468,11 +452,15 @@ async function cryptowatchWsSetup() {
     const cryptowatch_market_prices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
     for (let i in cryptowatch_market_ids) {
         const cryptowatch_market_id = cryptowatch_market_ids[i].split(":")[1];
-        const cryptowatch_market = cryptowatch_markets.result.find(row => row.id == cryptowatch_market_id);
-        const exchange = cryptowatch_market.exchange;
-        const pair = cryptowatch_market.pair;
-        const key = `market:${exchange}:${pair}`;
-        PRICE_FEEDS[cryptowatch_market_ids[i]] = cryptowatch_market_prices.result[key];
+        try {
+            const cryptowatch_market = cryptowatch_markets.result.find(row => row.id == cryptowatch_market_id);
+            const exchange = cryptowatch_market.exchange;
+            const pair = cryptowatch_market.pair;
+            const key = `market:${exchange}:${pair}`;
+            PRICE_FEEDS[cryptowatch_market_ids[i]] = cryptowatch_market_prices.result[key];
+        } catch (e) {
+            console.error("Could not set price feed for cryptowatch:" + cryptowatch_market_id);
+        }
     }
     console.log(PRICE_FEEDS);
 
