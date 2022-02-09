@@ -14,6 +14,10 @@ const NONCES = {};
 const WALLETS = {};
 const FILL_QUEUE = [];
 const MARKETS = {};
+const chainlinkProviders = {};
+
+// coinlink interface ABI
+const aggregatorV3InterfaceABI = [{ "inputs": [], "name": "decimals", "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "description", "outputs": [{ "internalType": "string", "name": "", "type": "string" }], "stateMutability": "view", "type": "function" }, { "inputs": [{ "internalType": "uint80", "name": "_roundId", "type": "uint80" }], "name": "getRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "latestRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "version", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }]
 
 // Load MM config
 let MM_CONFIG;
@@ -33,14 +37,21 @@ for (let marketId in MM_CONFIG.pairs) {
 }
 console.log("ACTIVE PAIRS", activePairs);
 
-// Start price feeds
-cryptowatchWsSetup();
-
 // Connect to zksync
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
-let ethersProvider, syncProvider, fillOrdersInterval, indicateLiquidityInterval;
-ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
+let ethersProvider;
+const providerUrl = (process.env.INFURA_URL || MM_CONFIG.infuraUrl);
+if(providerUrl && ETH_NETWORK=="mainnet") {
+    ethersProvider = ethers.getDefaultProvider(providerUrl);
+} else {
+    ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
+}
+
+// Start price feeds
+await setupPriceFeeds();
+
+let syncProvider, fillOrdersInterval, indicateLiquidityInterval;
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
     const keys = [];
@@ -438,32 +449,51 @@ async function processFillQueue() {
     setTimeout(processFillQueue, 100);
 }
 
-async function cryptowatchWsSetup() {
-    const cryptowatch_market_ids = [];
+async function setupPriceFeeds() {
+  const cryptowatch = [], chainlink = [];
     for (let market in MM_CONFIG.pairs) {
-        const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
-        const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
-        if (primaryPriceFeed) cryptowatch_market_ids.push(primaryPriceFeed);
-        if (secondaryPriceFeed) cryptowatch_market_ids.push(secondaryPriceFeed);
-    }
+      if(!MM_CONFIG.pairs[market].active) { continue; }
+      const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
+      const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
+      [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
+          if(!priceFeed) { return; }
+          const [provider, id] = priceFeed.split(':');
+          switch(provider) {
+              case 'cryptowatch':
+                  if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
+                  break;
+              case 'chainlink':
+                  if(!chainlink.includes(id)) { chainlink.push(id); }
+                  break;
+              default:
+                  throw new Error("Price feed provider "+provider+" is not available.")
+                  break;
+          }
+      });
+  }
+  if(chainlinkSetup.length) await chainlinkSetup(chainlink);
+  if(cryptowatch.length) await cryptowatchWsSetup(cryptowatch);
 
+  console.log(PRICE_FEEDS);
+}
+
+async function cryptowatchWsSetup(cryptowatch_market_ids) {
     // Set initial prices
     const cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
     const cryptowatch_markets = await fetch("https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey).then(r => r.json());
     const cryptowatch_market_prices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
     for (let i in cryptowatch_market_ids) {
-        const cryptowatch_market_id = cryptowatch_market_ids[i].split(":")[1];
+        const cryptowatch_market_id = cryptowatch_market_ids[i];
         try {
             const cryptowatch_market = cryptowatch_markets.result.find(row => row.id == cryptowatch_market_id);
             const exchange = cryptowatch_market.exchange;
             const pair = cryptowatch_market.pair;
             const key = `market:${exchange}:${pair}`;
-            PRICE_FEEDS[cryptowatch_market_ids[i]] = cryptowatch_market_prices.result[key];
+            PRICE_FEEDS['cryptowatch:'+cryptowatch_market_ids[i]] = cryptowatch_market_prices.result[key];
         } catch (e) {
             console.error("Could not set price feed for cryptowatch:" + cryptowatch_market_id);
         }
     }
-    console.log(PRICE_FEEDS);
 
     const subscriptionMsg = {
       "subscribe": {
@@ -471,7 +501,7 @@ async function cryptowatchWsSetup() {
       }
     }
     for (let i in cryptowatch_market_ids) {
-        const cryptowatch_market_id = cryptowatch_market_ids[i].split(":")[1];
+        const cryptowatch_market_id = cryptowatch_market_ids[i];
 
         // first get initial price info
 
@@ -500,6 +530,31 @@ async function cryptowatchWsSetup() {
     function onclose () {
         setTimeout(cryptowatchWsSetup, 5000);
     }
+}
+
+async function chainlinkSetup(chainlink_market_address) {
+    chainlink_market_address.forEach(async (address) => {
+        try {
+            const provider = new ethers.Contract(address, aggregatorV3InterfaceABI, ethersProvider);
+            const decimals = await provider.decimals();
+            chainlinkProviders['chainlink:'+address] = [provider, decimals];
+
+            // get inital price
+            const response = await provider.latestRoundData();
+            PRICE_FEEDS['chainlink:'+address] = parseFloat(response.answer) / 10**decimals;
+        } catch (e) {
+            throw new Error ("Error while setting up chainlink for "+address+", Error: "+e);
+        }
+    });
+    setInterval(chainlinkUpdate, 10000);
+}
+
+async function chainlinkUpdate() {
+    await Promise.all(Object.keys(chainlinkProviders).map(async (key) => {
+        const [provider, decimals] = chainlinkProviders[key];
+        const response = await provider.latestRoundData();
+        const price = parseFloat(response.answer) / 10**decimals;
+    }));
 }
 
 const CLIENT_ID = (Math.random() * 100000).toString(16);

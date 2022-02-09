@@ -24,7 +24,19 @@ Set your `eth_privkey` to be able to relay transactions. The ETH address with th
 
 Currently zkSync needs around 5 seconds to process a single swap and generate the receipt. So  there is a upper limit of 12 swaps per wallet per minute. To circumvent this, there is also the option to use the `eth_privkeys` array. Here you can add any number of private keys. Each should be loaded up with adequate funds for market making. The founds will be handled separately, therefor each additional wallet has the opportunity to process (at least) 12 more swaps per minute.
 
-For now, you need a Cryptowatch API key to use the market maker. Once you obtain one, you can set the `cryptowatchApiKey` field in `config.json`.
+###### External price feed
+You have to options to get a price feed for your market maker. It is not recommended to use different price feeds sources as primary and secondary feed, as those might have some difference and could stop the market maker.
+
+**Cryptowatch**
+You need a Cryptowatch API key to use the market maker. Once you obtain one, you can set the `cryptowatchApiKey` field in `config.json`. And set it to your public key.
+
+You can use [this link](https://api.cryptowat.ch/markets) to download a JSON with all available market endpoints. Add those to you pair config as "cryptowatch:<id>".
+
+**Chainlink**
+With chainlink you have access to price oracles via blockchain. The requests are read calls to a smart contract. the public ethers provider might be to slow for a higher number of pairs or at times of high demand. Therefore it might be needed to have access to an Infura account (100000 Requests/Day for free). There you can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`
+
+You can get the available market contracts [here.](https://docs.chain.link/docs/ethereum-addresses/)Add those to you pair config as "chainlink:<address>".
+
 
 To run the marketmaker:
 
@@ -130,4 +142,4 @@ cat config.json | tr -d ' ' | tr -d '\n'
 
 and set it to the value of the `MM_CONFIG` environment variable to override the config file.
 
-You can also override the private key in the config file with the `ETH_PRIVKEY` environment variable, and the cryptowatch API key with the `CRYPTOWATCH_API_KEY` environment variable. 
+You can also override the private key in the config file with the `ETH_PRIVKEY` environment variable, and the cryptowatch API key with the `CRYPTOWATCH_API_KEY` environment variable, and the Infura provider url with `INFURA_URL`
