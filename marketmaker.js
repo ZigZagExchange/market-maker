@@ -544,7 +544,7 @@ async function chainlinkSetup(chainlink_market_address) {
             throw new Error ("Error while setting up chainlink for "+address+", Error: "+e);
         }
     });
-    setInterval(chainlinkUpdate, 5000);
+    setInterval(chainlinkUpdate, 10000);
 }
 
 async function chainlinkUpdate() {
