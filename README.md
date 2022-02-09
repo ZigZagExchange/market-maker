@@ -33,7 +33,7 @@ You need a Cryptowatch API key to use the market maker. Once you obtain one, you
 You can use [this link](https://api.cryptowat.ch/markets) to download a JSON with all available market endpoints. Add those to you pair config as "cryptowatch:<id>".
 
 **Chainlink**
-With chainlink you have access to price oracles via blockchain. The requests are read calls to a smart contract. the public ethers provider might be to slow for a higher number of pairs or at times of high demand. Therefore it might be needed to have access to an Infura account. There you can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`
+With chainlink you have access to price oracles via blockchain. The requests are read calls to a smart contract. the public ethers provider might be to slow for a higher number of pairs or at times of high demand. Therefore it might be needed to have access to an Infura account (100000 Requests/Day for free). There you can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`
 
 You can get the available market contracts [here.](https://docs.chain.link/docs/ethereum-addresses/)Add those to you pair config as "chainlink:<address>".
 
