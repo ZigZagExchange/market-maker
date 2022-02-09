@@ -34,7 +34,7 @@ for (let marketId in MM_CONFIG.pairs) {
 console.log("ACTIVE PAIRS", activePairs);
 
 // Start price feeds
-cryptowatchWsSetup();
+setupPriceFeeds();
 
 // Connect to zksync
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
@@ -438,7 +438,7 @@ async function processFillQueue() {
     setTimeout(processFillQueue, 100);
 }
 
-function setupPriceFeed() {
+function setupPriceFeeds() {
   const cryptowatch = [], chainlink = [];
     for (let market in MM_CONFIG.pairs) {
       if(!MM_CONFIG.pairs[market].active) { continue; }
