@@ -14,6 +14,7 @@ const NONCES = {};
 const WALLETS = {};
 const FILL_QUEUE = [];
 const MARKETS = {};
+const chainlinkProviders = {};
 
 // coinlink interface ABI
 const aggregatorV3InterfaceABI = [{ "inputs": [], "name": "decimals", "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "description", "outputs": [{ "internalType": "string", "name": "", "type": "string" }], "stateMutability": "view", "type": "function" }, { "inputs": [{ "internalType": "uint80", "name": "_roundId", "type": "uint80" }], "name": "getRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "latestRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "version", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }]
@@ -36,14 +37,10 @@ for (let marketId in MM_CONFIG.pairs) {
 }
 console.log("ACTIVE PAIRS", activePairs);
 
-// Start price feeds
-setupPriceFeeds();
-
 // Connect to zksync
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
-let ethersProvider, syncProvider, fillOrdersInterval, indicateLiquidityInterval;
-
+let ethersProvider;
 const providerUrl = (process.env.INFURA_URL || MM_CONFIG.infuraUrl);
 if(providerUrl && ETH_NETWORK=="mainnet") {
     ethersProvider = ethers.getDefaultProvider(providerUrl);
@@ -51,6 +48,10 @@ if(providerUrl && ETH_NETWORK=="mainnet") {
     ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
 }
 
+// Start price feeds
+await setupPriceFeeds();
+
+let syncProvider, fillOrdersInterval, indicateLiquidityInterval;
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
     const keys = [];
@@ -448,7 +449,7 @@ async function processFillQueue() {
     setTimeout(processFillQueue, 100);
 }
 
-function setupPriceFeeds() {
+async function setupPriceFeeds() {
   const cryptowatch = [], chainlink = [];
     for (let market in MM_CONFIG.pairs) {
       if(!MM_CONFIG.pairs[market].active) { continue; }
@@ -470,8 +471,8 @@ function setupPriceFeeds() {
           }
       });
   }
-  if(chainlinkSetup.length) chainlinkSetup(chainlink);
-  if(cryptowatch.length) cryptowatchWsSetup(cryptowatch);
+  if(chainlinkSetup.length) await chainlinkSetup(chainlink);
+  if(cryptowatch.length) await cryptowatchWsSetup(cryptowatch);
 }
 
 async function cryptowatchWsSetup(cryptowatch_market_ids) {
