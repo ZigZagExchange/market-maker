@@ -44,7 +44,14 @@ setupPriceFeeds();
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
 let ethersProvider, syncProvider, fillOrdersInterval, indicateLiquidityInterval;
-ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
+
+const providerUrl = (process.env.INFURA_URL || MM_CONFIG.infuraUrl);
+if(providerUrl && ETH_NETWORK=="mainnet") {
+    ethersProvider = ethers.getDefaultProvider(providerUrl);
+} else {
+    ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
+}
+
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
     const keys = [];
