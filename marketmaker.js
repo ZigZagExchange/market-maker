@@ -438,27 +438,44 @@ async function processFillQueue() {
     setTimeout(processFillQueue, 100);
 }
 
-async function cryptowatchWsSetup() {
-    const cryptowatch_market_ids = [];
+function setupPriceFeed() {
+  const cryptowatch = [], chainlink = [];
     for (let market in MM_CONFIG.pairs) {
-        const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
-        const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
-        if (primaryPriceFeed) cryptowatch_market_ids.push(primaryPriceFeed);
-        if (secondaryPriceFeed) cryptowatch_market_ids.push(secondaryPriceFeed);
-    }
+      if(!MM_CONFIG.pairs[market].active) { continue; }
+      const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
+      const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
+      [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
+          if(!priceFeed) { return; }
+          const [provider, id] = priceFeed.split(':');
+          switch(provider) {
+              case 'cryptowatch':
+                  cryptowatch.push(id);
+                  break;
+              case 'chainlink':
+                  chainlink.push(id);
+                  break;
+              default:
+                  throw new Error("Price feed provider "+provider+" is not available.")
+                  break;
+          }
+      });
+  }
+  cryptowatchWsSetup(cryptowatch);
+}
 
+async function cryptowatchWsSetup(cryptowatch_market_ids) {
     // Set initial prices
     const cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
     const cryptowatch_markets = await fetch("https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey).then(r => r.json());
     const cryptowatch_market_prices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
     for (let i in cryptowatch_market_ids) {
-        const cryptowatch_market_id = cryptowatch_market_ids[i].split(":")[1];
+        const cryptowatch_market_id = cryptowatch_market_ids[i];
         try {
             const cryptowatch_market = cryptowatch_markets.result.find(row => row.id == cryptowatch_market_id);
             const exchange = cryptowatch_market.exchange;
             const pair = cryptowatch_market.pair;
             const key = `market:${exchange}:${pair}`;
-            PRICE_FEEDS[cryptowatch_market_ids[i]] = cryptowatch_market_prices.result[key];
+            PRICE_FEEDS['cryptowatch:'+cryptowatch_market_ids[i]] = cryptowatch_market_prices.result[key];
         } catch (e) {
             console.error("Could not set price feed for cryptowatch:" + cryptowatch_market_id);
         }
@@ -471,7 +488,7 @@ async function cryptowatchWsSetup() {
       }
     }
     for (let i in cryptowatch_market_ids) {
-        const cryptowatch_market_id = cryptowatch_market_ids[i].split(":")[1];
+        const cryptowatch_market_id = cryptowatch_market_ids[i];
 
         // first get initial price info
 
