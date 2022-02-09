@@ -15,6 +15,10 @@ const WALLETS = {};
 const FILL_QUEUE = [];
 const MARKETS = {};
 
+// coinlink interface ABI
+const aggregatorV3InterfaceABI = [{ "inputs": [], "name": "decimals", "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "description", "outputs": [{ "internalType": "string", "name": "", "type": "string" }], "stateMutability": "view", "type": "function" }, { "inputs": [{ "internalType": "uint80", "name": "_roundId", "type": "uint80" }], "name": "getRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "latestRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "version", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }]
+
+
 // Load MM config
 let MM_CONFIG;
 if (process.env.MM_CONFIG) {
@@ -449,10 +453,10 @@ function setupPriceFeeds() {
           const [provider, id] = priceFeed.split(':');
           switch(provider) {
               case 'cryptowatch':
-                  cryptowatch.push(id);
+                  if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
                   break;
               case 'chainlink':
-                  chainlink.push(id);
+                  if(!chainlink.includes(id)) { chainlink.push(id); }
                   break;
               default:
                   throw new Error("Price feed provider "+provider+" is not available.")
@@ -460,7 +464,8 @@ function setupPriceFeeds() {
           }
       });
   }
-  cryptowatchWsSetup(cryptowatch);
+  if(chainlinkSetup.length) chainlinkSetup(chainlink);
+  if(cryptowatch.length) cryptowatchWsSetup(cryptowatch);
 }
 
 async function cryptowatchWsSetup(cryptowatch_market_ids) {
@@ -480,7 +485,6 @@ async function cryptowatchWsSetup(cryptowatch_market_ids) {
             console.error("Could not set price feed for cryptowatch:" + cryptowatch_market_id);
         }
     }
-    console.log(PRICE_FEEDS);
 
     const subscriptionMsg = {
       "subscribe": {
@@ -517,6 +521,32 @@ async function cryptowatchWsSetup(cryptowatch_market_ids) {
     function onclose () {
         setTimeout(cryptowatchWsSetup, 5000);
     }
+}
+
+const chainlinkProviders = {};
+async function chainlinkSetup(chainlink_market_address) {
+    chainlink_market_address.forEach(async (address) => {
+        try {
+            const provider = new ethers.Contract(address, aggregatorV3InterfaceABI, ethersProvider);
+            const decimals = await provider.decimals();
+            chainlinkProviders['chainlink:'+address] = [provider, decimals];
+
+            // get inital price
+            const response = await provider.latestRoundData();
+            PRICE_FEEDS['chainlink:'+address] = parseFloat(response.answer) / 10**decimals;
+        } catch (e) {
+            throw new Error ("Error while setting up chainlink for "+address+", Error: "+e);
+        }
+    });
+    setInterval(chainlinkUpdate, 5000);
+}
+
+async function chainlinkUpdate() {
+    await Promise.all(Object.keys(chainlinkProviders).map(async (key) => {
+        const [provider, decimals] = chainlinkProviders[key];
+        const response = await provider.latestRoundData();
+        const price = parseFloat(response.answer) / 10**decimals;
+    }));
 }
 
 const CLIENT_ID = (Math.random() * 100000).toString(16);
