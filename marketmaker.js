@@ -473,6 +473,8 @@ async function setupPriceFeeds() {
   }
   if(chainlinkSetup.length) await chainlinkSetup(chainlink);
   if(cryptowatch.length) await cryptowatchWsSetup(cryptowatch);
+
+  console.log(PRICE_FEEDS);
 }
 
 async function cryptowatchWsSetup(cryptowatch_market_ids) {
@@ -530,7 +532,6 @@ async function cryptowatchWsSetup(cryptowatch_market_ids) {
     }
 }
 
-const chainlinkProviders = {};
 async function chainlinkSetup(chainlink_market_address) {
     chainlink_market_address.forEach(async (address) => {
         try {
