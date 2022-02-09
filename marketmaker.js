@@ -140,7 +140,7 @@ function onWsClose () {
 
 async function handleMessage(json) {
     const msg = JSON.parse(json);
-    if (!(["lastprice", "liquidity2", "fillstatus"]).includes(msg.op)) console.log(json.toString());
+    if (!(["lastprice", "liquidity2", "fillstatus", "marketinfo"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
             Object.keys(WALLETS).forEach(accountId => {
@@ -181,6 +181,17 @@ async function handleMessage(json) {
         case "marketinfo":
             const market_info = msg.args[0];
             MARKETS[market_info.alias] = market_info;
+            let oldBaseFee, oldQuoteFee;
+            try {
+                oldBaseFee = MARKETS[market_info.alias].baseFee;
+                oldQuoteFee = MARKETS[market_info.alias].quoteFee;
+            } catch (e) {
+                console.log(market_info)
+                break
+            }
+            const newBaseFee = market_info.baseFee;
+            const newQuoteFee = market_info.quoteFee;
+            console.log(`marketinfo - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
             break
         default:
             break
