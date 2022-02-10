@@ -180,7 +180,8 @@ async function handleMessage(json) {
             break
         case "marketinfo":
             const market_info = msg.args[0];
-            MARKETS[market_info.alias] = market_info;
+            const market_id = market_info.alias;
+            MARKETS[market_id] = market_info;
             let oldBaseFee, oldQuoteFee;
             try {
                 oldBaseFee = MARKETS[market_info.alias].baseFee;
@@ -191,7 +192,7 @@ async function handleMessage(json) {
             }
             const newBaseFee = market_info.baseFee;
             const newQuoteFee = market_info.quoteFee;
-            console.log(`marketinfo - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
+            console.log(`marketinfo ${market_id} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
             break
         default:
             break
