@@ -540,7 +540,7 @@ async function cryptowatchWsSetup(cryptowatch_market_ids) {
         PRICE_FEEDS[market_id] = price;
     };
     function onclose () {
-        setTimeout(cryptowatchWsSetup, 5000);
+        setTimeout(cryptowatchWsSetup, 5000, cryptowatch_market_ids);
     }
 }
 
