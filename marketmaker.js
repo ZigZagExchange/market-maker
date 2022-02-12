@@ -109,7 +109,10 @@ setTimeout(processFillQueue, 1000);
 
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
-zigzagws.on('error', console.error);
+zigzagws.on('error', (error) => {
+    console.error(error);
+    onWsClose();
+});
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
