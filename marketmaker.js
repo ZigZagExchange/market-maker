@@ -617,7 +617,12 @@ function indicateLiquidity (market_id) {
         }
     }
     const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity, CLIENT_ID] };
-    zigzagws.send(JSON.stringify(msg));
+    try {
+        zigzagws.send(JSON.stringify(msg));
+    } catch (e) {
+        console.error("Could not send liquidity");
+        console.error(e);
+    }
 }
 
 function getMidPrice (market_id) {
