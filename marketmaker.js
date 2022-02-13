@@ -109,10 +109,7 @@ setTimeout(processFillQueue, 1000);
 
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
-zigzagws.on('error', (error) => {
-    console.error(error);
-    onWsClose();
-});
+zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
@@ -137,10 +134,7 @@ function onWsClose () {
         clearInterval(indicateLiquidityInterval)
         zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
         zigzagws.on('open', onWsOpen);
-        zigzagws.on('error', (error) => {
-            console.error(error);
-            onWsClose();
-        });
+        zigzagws.on('error', console.error);
     }, 5000);
 }
 
@@ -533,10 +527,8 @@ async function cryptowatchWsSetup(cryptowatch_market_ids) {
     cryptowatch_ws.on('open', onopen);
     cryptowatch_ws.on('message', onmessage);
     cryptowatch_ws.on('close', onclose);
-    cryptowatch_ws.on('error', (error) => {
-        console.error(error);
-        onclose();
-    });
+    cryptowatch_ws.on('error', console.error);
+    
     function onopen() {
         cryptowatch_ws.send(JSON.stringify(subscriptionMsg));
     }
