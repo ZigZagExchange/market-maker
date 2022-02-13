@@ -109,11 +109,11 @@ setTimeout(processFillQueue, 1000);
 
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
+zigzagws.on('close', onWsClose);
 zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
-    zigzagws.on('close', onWsClose);
     fillOrdersInterval = setInterval(fillOpenOrders, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
@@ -134,6 +134,7 @@ function onWsClose () {
         clearInterval(indicateLiquidityInterval)
         zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
         zigzagws.on('open', onWsOpen);
+        zigzagws.on('close', onWsClose);
         zigzagws.on('error', console.error);
     }, 5000);
 }
