@@ -15,6 +15,7 @@ const WALLETS = {};
 const FILL_QUEUE = [];
 const MARKETS = {};
 const chainlinkProviders = {};
+const PAST_ORDER_LIST = {};
 
 // coinlink interface ABI
 const aggregatorV3InterfaceABI = [{ "inputs": [], "name": "decimals", "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "description", "outputs": [{ "internalType": "string", "name": "", "type": "string" }], "stateMutability": "view", "type": "function" }, { "inputs": [{ "internalType": "uint80", "name": "_roundId", "type": "uint80" }], "name": "getRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "latestRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "version", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }]
@@ -373,6 +374,7 @@ async function sendfillrequest(orderreceipt, accountId) {
   // Set wallet flag
   WALLETS[accountId]['ORDER_BROADCASTING'] = true;
 
+  rememberOrder(chainId, orderId, market_id, quote.quotePrice, fillOrder);
   const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
   zigzagws.send(JSON.stringify(resp));
 }
@@ -636,6 +638,25 @@ function getMidPrice (market_id) {
         midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
     }
     return midPrice;
+}
+
+function rememberOrder(chainId, orderId, market, price, fillOrder) {
+    const timestamp = Date.now() / 1000;
+    for (const [key, value] of Object.entries(PAST_ORDER_LIST)) {
+        if (value['expiry'] < timestamp) {
+            delete PAST_ORDER_LIST[key];
+        }
+    }
+
+    const expiry = timestamp + 900;
+    PAST_ORDER_LIST[orderId] = {
+        'chainId': chainId,
+        'orderId': orderId,
+        'market': market,
+        'price': price,
+        'fillOrder': fillOrder,
+        'expiry':expiry
+    };
 }
 
 async function updateAccountState() {
