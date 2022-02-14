@@ -115,7 +115,28 @@ Orders coming in below the `minSpread` from the price feed will not be filled. T
 
 A market can be set inactive by flipping the active switch to `false`. 
 
-## Pair Setting Examples 
+## Pair Options
+
+###### delayAfterFill
+The market maker will stop market making on the pair, after successfully filling an order. This can be used to wait out bigger price moves.
+Example:
+```
+"ETH-USDC": {
+    "mode": "pricefeed",
+    "side": "b",
+    "priceFeedPrimary": "cryptowatch:6631",
+    "priceFeedSecondary": "cryptowatch:588",
+    "slippageRate": 1e-5,
+    "maxSize": 100,
+    "minSize": 0.0003,
+    "minSpread": 0.0005,
+    "active": true,
+    "delayAfterFill": 60
+}
+```
+
+
+## Pair Setting Examples
 
 Stable-Stable constant price:
 
