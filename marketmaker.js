@@ -116,9 +116,9 @@ function onWsOpen() {
     zigzagws.on('message', handleMessage);
     zigzagws.on('close', onWsClose);
     fillOrdersInterval = setInterval(fillOpenOrders, 5000);
+    indicateLiquidityInterval = setInterval(indicateLiquidity, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
-            indicateLiquidityInterval = setInterval(() => indicateLiquidity(market), 5000);
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
             zigzagws.send(JSON.stringify(msg));
         }
@@ -584,58 +584,62 @@ async function chainlinkUpdate() {
 }
 
 const CLIENT_ID = (Math.random() * 100000).toString(16);
-function indicateLiquidity (market_id) {
-    try {
-        validatePriceFeed(market_id);
-    } catch(e) {
-        console.error("Can not indicateLiquidity ("+market_id+") because: " + e);
-        return false;
-    }
+function indicateLiquidity () {
+    for(const pair in MM_CONFIG.pairs) {
+        const mmConfig = MM_CONFIG.pairs[pair];
+        if(!mmConfig || !mmConfig.active) continue;
 
-    const marketInfo = MARKETS[market_id];
-    if (!marketInfo) return false;
-
-    const mmConfig = MM_CONFIG.pairs[market_id];
-    const midPrice = getMidPrice(market_id);
-    if (!midPrice) return false;
-
-    const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
-    const side = mmConfig.side || 'd';
-
-    let maxBaseBalance = 0, maxQuoteBalance = 0;
-    Object.keys(WALLETS).forEach(accountId => {
-        const walletBase = WALLETS[accountId]['account_state'].committed.balances[marketInfo.baseAsset.symbol];
-        const walletQuote = WALLETS[accountId]['account_state'].committed.balances[marketInfo.quoteAsset.symbol];
-        if (Number(walletBase) > maxBaseBalance) {
-            maxBaseBalance = walletBase;
+        try {
+            validatePriceFeed(market_id);
+        } catch(e) {
+            console.error("Can not indicateLiquidity ("+market_id+") because: " + e);
+            return continue;
         }
-        if (Number(walletQuote) > maxQuoteBalance) {
-            maxQuoteBalance = walletQuote;
-        }
-    });
-    const baseBalance = maxBaseBalance / 10**marketInfo.baseAsset.decimals;
-    const quoteBalance = maxQuoteBalance / 10**marketInfo.quoteAsset.decimals;
-    const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
-    const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
 
-    const splits = 10;
-    const liquidity = [];
-    for (let i=1; i <= splits; i++) {
-        const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/splits));
-        const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/splits));
-        if ((['b','d']).includes(side)) {
-            liquidity.push(["b", buyPrice, maxBuySize / splits, expires]);
+        const marketInfo = MARKETS[market_id];
+        if (!marketInfo) return continue;
+
+        const midPrice = getMidPrice(market_id);
+        if (!midPrice) return continue;
+
+        const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
+        const side = mmConfig.side || 'd';
+
+        let maxBaseBalance = 0, maxQuoteBalance = 0;
+        Object.keys(WALLETS).forEach(accountId => {
+            const walletBase = WALLETS[accountId]['account_state'].committed.balances[marketInfo.baseAsset.symbol];
+            const walletQuote = WALLETS[accountId]['account_state'].committed.balances[marketInfo.quoteAsset.symbol];
+            if (Number(walletBase) > maxBaseBalance) {
+                maxBaseBalance = walletBase;
+            }
+            if (Number(walletQuote) > maxQuoteBalance) {
+                maxQuoteBalance = walletQuote;
+            }
+        });
+        const baseBalance = maxBaseBalance / 10**marketInfo.baseAsset.decimals;
+        const quoteBalance = maxQuoteBalance / 10**marketInfo.quoteAsset.decimals;
+        const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
+        const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
+
+        const splits = 10;
+        const liquidity = [];
+        for (let i=1; i <= splits; i++) {
+            const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/splits));
+            const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/splits));
+            if ((['b','d']).includes(side)) {
+                liquidity.push(["b", buyPrice, maxBuySize / splits, expires]);
+            }
+            if ((['s','d']).includes(side)) {
+                liquidity.push(["s", sellPrice, maxSellSize / splits, expires]);
+            }
         }
-        if ((['s','d']).includes(side)) {
-            liquidity.push(["s", sellPrice, maxSellSize / splits, expires]);
+        const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity, CLIENT_ID] };
+        try {
+            zigzagws.send(JSON.stringify(msg));
+        } catch (e) {
+            console.error("Could not send liquidity");
+            console.error(e);
         }
-    }
-    const msg = { op: "indicateliq2", args: [CHAIN_ID, market_id, liquidity, CLIENT_ID] };
-    try {
-        zigzagws.send(JSON.stringify(msg));
-    } catch (e) {
-        console.error("Could not send liquidity");
-        console.error(e);
     }
 }
 
