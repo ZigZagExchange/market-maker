@@ -411,8 +411,20 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder, wallet) {
     success = false;
   }
   console.timeEnd('receipt' + randint);
-
   console.log("Swap broadcast result", {swap, receipt});
+
+  if(success) {
+    const order = PAST_ORDER_LIST[orderid];
+    if(order) {
+      const market_id = order.market;
+      const mmConfig = MM_CONFIG.pairs[market_id];
+      if(mmConfig && mmConfig.delayAfterFill) {
+        mmConfig.active = false;
+        setTimeout(activatePair, mmConfig.delayAfterFill, market_id);
+      }
+    }
+  }
+
   const newstatus = success ? 'f' : 'r';
   const error = success ? null : swap.error.toString();
   const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,newstatus,txhash,error]]]}
@@ -638,6 +650,12 @@ function getMidPrice (market_id) {
         midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
     }
     return midPrice;
+}
+
+function activatePair(market_id) {
+    const mmConfig = MM_CONFIG.pairs[market_id];
+    if(!mmConfig) return;
+    mmConfig.active = true;
 }
 
 function rememberOrder(chainId, orderId, market, price, fillOrder) {
