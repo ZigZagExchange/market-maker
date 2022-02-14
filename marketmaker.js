@@ -585,22 +585,22 @@ async function chainlinkUpdate() {
 
 const CLIENT_ID = (Math.random() * 100000).toString(16);
 function indicateLiquidity () {
-    for(const pair in MM_CONFIG.pairs) {
-        const mmConfig = MM_CONFIG.pairs[pair];
+    for(const market_id in MM_CONFIG.pairs) {
+        const mmConfig = MM_CONFIG.pairs[market_id];
         if(!mmConfig || !mmConfig.active) continue;
 
         try {
             validatePriceFeed(market_id);
         } catch(e) {
             console.error("Can not indicateLiquidity ("+market_id+") because: " + e);
-            return continue;
+            continue;
         }
 
         const marketInfo = MARKETS[market_id];
-        if (!marketInfo) return continue;
+        if (!marketInfo) continue;
 
         const midPrice = getMidPrice(market_id);
-        if (!midPrice) return continue;
+        if (!midPrice) continue;
 
         const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
         const side = mmConfig.side || 'd';
