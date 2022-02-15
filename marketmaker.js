@@ -171,7 +171,7 @@ async function handleMessage(json) {
                 break
             } else {
                 try {
-                    await broadcastfill(chainId, orderId, msg.args[2], fillOrder, wallet);
+                    await broadcastFill(chainId, orderId, msg.args[2], fillOrder, wallet);
                 } catch (e) {
                     console.error(e);
                 }
@@ -192,7 +192,7 @@ async function handleMessage(json) {
             MARKETS[marketId] = marketInfo;
             const newBaseFee = MARKETS[marketId].baseFee;
             const newQuoteFee = MARKETS[marketId].quoteFee;
-            console.log(`marketinfo ${} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
+            console.log(`marketinfo ${marketId} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
             break
         default:
             break
@@ -378,7 +378,7 @@ async function sendFillRequest(orderreceipt, accountId) {
     zigzagws.send(JSON.stringify(resp));
 }
 
-async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
+async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
     // Nonce check
     const nonce = swapOffer.nonce;
     const userNonce = NONCES[swapOffer.accountId];
@@ -420,7 +420,7 @@ async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
             if(mmConfig && mmConfig.delayAfterFill) {
                 mmConfig.active = false;
                 setTimeout(activatePair, mmConfig.delayAfterFill * 1000, market_id);
-                console.log(`Set ${market_id} passive for ${mmConfig.delayAfterFill} seconds.`)
+                console.log(`Set ${market_id} passive for ${mmConfig.delayAfterFill} seconds.`);
             }
         }
    }
@@ -663,7 +663,7 @@ function activatePair(marketId) {
     const mmConfig = MM_CONFIG.pairs[marketId];
     if(!mmConfig) return;
     mmConfig.active = true;
-    console.log(`Set ${market_id} active.`)
+    console.log(`Set ${market_id} active.`);
 }
 
 function rememberOrder(chainId, orderId, market, price, fillOrder) {
