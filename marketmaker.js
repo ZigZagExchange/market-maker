@@ -17,8 +17,6 @@ const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 
-// coinlink interface ABI
-const aggregatorV3InterfaceABI = JSON.parse(fs.readFileSync('chainlinkV3InterfaceABI.abi'));
 
 // Load MM config
 let MM_CONFIG;
@@ -561,9 +559,10 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
     }
 }
 
-async function chainlinkSetup(chainlink_market_address) {
-    chainlink_market_address.forEach(async (address) => {
+async function chainlinkSetup(chainlinkMarketAddress) {
+    chainlinkMarketAddress.forEach(async (address) => {
         try {
+            const aggregatorV3InterfaceABI = JSON.parse(fs.readFileSync('chainlinkV3InterfaceABI.abi'));
             const provider = new ethers.Contract(address, aggregatorV3InterfaceABI, ethersProvider);
             const decimals = await provider.decimals();
             CHAINLINK_PROVIDERS['chainlink:'+address] = [provider, decimals];
