@@ -675,7 +675,6 @@ function rememberOrder(chainId, orderId, market, price, fillOrder) {
     const expiry = timestamp + 900;
     PAST_ORDER_LIST[orderId] = {
         'chainId': chainId,
-        'orderId': orderId,
         'market': market,
         'price': price,
         'fillOrder': fillOrder,
