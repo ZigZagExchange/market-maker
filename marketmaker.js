@@ -17,7 +17,6 @@ const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 
-
 // Load MM config
 let MM_CONFIG;
 if (process.env.MM_CONFIG) {
