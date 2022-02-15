@@ -52,7 +52,7 @@ if(providerUrl && ETH_NETWORK=="mainnet") {
 // Start price feeds
 await setupPriceFeeds();
 
-let syncProvider, fillOrdersInterval, indicateLiquidityInterval;
+let syncProvider, fillOrdersInterval;
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
     const keys = [];
@@ -108,6 +108,7 @@ setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
 // Initiate fill loop
 setTimeout(processFillQueue, 1000);
 
+let indicateLiquidityInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
 zigzagws.on('close', onWsClose);
