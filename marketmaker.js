@@ -17,7 +17,7 @@ const MARKETS = {};
 const chainlinkProviders = {};
 
 // coinlink interface ABI
-const aggregatorV3InterfaceABI = [{ "inputs": [], "name": "decimals", "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "description", "outputs": [{ "internalType": "string", "name": "", "type": "string" }], "stateMutability": "view", "type": "function" }, { "inputs": [{ "internalType": "uint80", "name": "_roundId", "type": "uint80" }], "name": "getRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "latestRoundData", "outputs": [{ "internalType": "uint80", "name": "roundId", "type": "uint80" }, { "internalType": "int256", "name": "answer", "type": "int256" }, { "internalType": "uint256", "name": "startedAt", "type": "uint256" }, { "internalType": "uint256", "name": "updatedAt", "type": "uint256" }, { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "version", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }]
+const aggregatorV3InterfaceABI = JSON.parse(fs.readFileSync('chainlinkV3InterfaceABI.abi'));
 
 // Load MM config
 let MM_CONFIG;
@@ -123,7 +123,7 @@ function onWsOpen() {
         }
     }
 }
-    
+
 function onWsClose () {
     console.log("Websocket closed. Restarting");
     Object.keys(WALLETS).forEach(accountId => {
@@ -234,7 +234,7 @@ function isOrderFillable(order) {
     if (mmSide !== 'd' && mmSide == side) {
         return { fillable: false, reason: "badside" };
     }
-    
+
     if (baseQuantity < mmConfig.minSize) {
         return { fillable: false, reason: "badsize" };
     }
@@ -309,7 +309,7 @@ function validatePriceFeed(market_id) {
     // Check if primary price exists
     const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
     if (!primaryPrice) throw new Error("Primary price feed unavailable");
-    
+
 
     // If there is no secondary price feed, the price auto-validates
     if (!secondaryPriceFeedId) return true;

@@ -2,9 +2,9 @@
 
 This is the reference market maker for Zigzag zksync markets. It works on both Rinkeby and Mainnet.
 
-This market maker uses existing price feeds to set bids and asks for a market. For now, in order to provide liquidity for a market, there must be an existing market with **greater** liquidity listed on Cryptowatch, via either Uniswap or some other centralized exchange. It is crucial that the oracle market have more liquidity than the Zigzag one so that you are not prone to oracle attacks. 
+This market maker uses existing price feeds to set bids and asks for a market. For now, in order to provide liquidity for a market, there must be an existing market with **greater** liquidity listed on Cryptowatch, via either Uniswap or some other centralized exchange. It is crucial that the oracle market have more liquidity than the Zigzag one so that you are not prone to oracle attacks.
 
-Soon we will add the ability to run standalone markets and this will not be an issue. 
+Soon we will add the ability to run standalone markets and this will not be an issue.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ Soon we will add the ability to run standalone markets and this will not be an i
 
 ## Setup
 
-Copy the `config.json.EXAMPLE` file to `config.json` to get started. 
+Copy the `config.json.EXAMPLE` file to `config.json` to get started.
 
 Set your `eth_privkey` to be able to relay transactions. The ETH address with that private key should be loaded up with adequate funds for market making.
 
@@ -93,27 +93,27 @@ You can add, remove, and configure pair settings in the `pairs` section. A pair 
 }
 ```
 
-There are 2 modes available with a 3rd on the way. 
+There are 2 modes available with a 3rd on the way.
 
-* `pricefeed`: Follows an external price oracle and updates indicated bids and asks based on that. 
+* `pricefeed`: Follows an external price oracle and updates indicated bids and asks based on that.
 * `constant`: Sets an `initPrice` and market makes around that price. Can be combined with single-sided liquidity to simulate limit orders.
-* `independent`: Under development. The price is set independent of a price feed. 
+* `independent`: Under development. The price is set independent of a price feed.
 
 For all modes the `slippageRate`, `maxSize`, `minSize`, `minSpread`, and `active` settings are mandatory.
 
-For `pricefeed` mode, the `priceFeedPrimary` is mandatory. 
+For `pricefeed` mode, the `priceFeedPrimary` is mandatory.
 
-For `independent` and `constant` mode, the `initPrice` is mandatory. 
+For `independent` and `constant` mode, the `initPrice` is mandatory.
 
 The `side` setting can be toggled for single-sided liquidity. By default, the side setting is set to `d`, which stands for double-sided liquidity. To toggle single-sided liquidity, the value can be set to `b` or `s` for buy-side only or sell-side only.
 
-The primary price feed is the price feed used to determine the bids and asks of the market maker. The secondary price feed is used to validate the first price feed and make sure the market isn't returning bad data. If the primary and secondary price feeds vary by more than 1%, the market maker will not fill orders. 
+The primary price feed is the price feed used to determine the bids and asks of the market maker. The secondary price feed is used to validate the first price feed and make sure the market isn't returning bad data. If the primary and secondary price feeds vary by more than 1%, the market maker will not fill orders.
 
-The slippage rate is the rate at which the spread increases as the base unit increases. For the example above, the spread goes up by 1e-5 for every 1 ETH in size added to an order. That's the equivalent of 0.1 bps / ETH in slippage. 
+The slippage rate is the rate at which the spread increases as the base unit increases. For the example above, the spread goes up by 1e-5 for every 1 ETH in size added to an order. That's the equivalent of 0.1 bps / ETH in slippage.
 
 Orders coming in below the `minSpread` from the price feed will not be filled. The spread is calculated as a decimal value. 0.01 is 1%, and 0.0002 is 2 basis points (bps).
 
-A market can be set inactive by flipping the active switch to `false`. 
+A market can be set inactive by flipping the active switch to `false`.
 
 ## Pair Setting Examples 
 
