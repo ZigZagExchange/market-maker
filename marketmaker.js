@@ -394,9 +394,9 @@ async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
     feeToken: "ETH",
     nonce: fillOrder.nonce
   });
-  const txhash = swap.txHash.split(":")[1];
-  const txhashmsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'b',txhash]]]}
-  zigzagws.send(JSON.stringify(txhashmsg));
+  const txHash = swap.txHash.split(":")[1];
+  const txHashMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'b',txHash]]]}
+  zigzagws.send(JSON.stringify(txHashMsg));
   console.timeEnd('syncswap' + randInt);
 
   console.time('receipt' + randInt);
@@ -428,7 +428,7 @@ async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
 
   const newstatus = success ? 'f' : 'r';
   const error = success ? null : swap.error.toString();
-  const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newstatus,txhash,error]]]}
+  const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newstatus,txHash,error]]]}
   zigzagws.send(JSON.stringify(ordercommitmsg));
 }
 
