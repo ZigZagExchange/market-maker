@@ -419,8 +419,8 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
             const mmConfig = MM_CONFIG.pairs[marketId];
             if(mmConfig && mmConfig.delayAfterFill) {
                 mmConfig.active = false;
-                setTimeout(activatePair, mmConfig.delayAfterFill * 1000, market_id);
-                console.log(`Set ${market_id} passive for ${mmConfig.delayAfterFill} seconds.`);
+                setTimeout(activatePair, mmConfig.delayAfterFill * 1000, marketId);
+                console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
             }
         }
    }
@@ -663,7 +663,7 @@ function activatePair(marketId) {
     const mmConfig = MM_CONFIG.pairs[marketId];
     if(!mmConfig) return;
     mmConfig.active = true;
-    console.log(`Set ${market_id} active.`);
+    console.log(`Set ${marketId} active.`);
 }
 
 function rememberOrder(chainId, orderId, market, price, fillOrder) {
