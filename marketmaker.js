@@ -329,7 +329,7 @@ function validatePriceFeed(marketId) {
     return true;
 }
 
-async function sendfillrequest(orderreceipt, accountId) {
+async function sendFillRequest(orderreceipt, accountId) {
   const chainId = orderreceipt[0];
   const orderId = orderreceipt[1];
   const marketId = orderreceipt[2];
@@ -465,7 +465,7 @@ async function processFillQueue() {
         if (index < FILL_QUEUE.length) {
             const selectedOrder = FILL_QUEUE.splice(index, 1);
             try {
-                await sendfillrequest(selectedOrder[0].order, accountId);
+                await sendFillRequest(selectedOrder[0].order, accountId);
                 return;
             } catch (e) {
                 console.error(e);
