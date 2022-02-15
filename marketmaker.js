@@ -202,12 +202,12 @@ async function handleMessage(json) {
 }
 
 function isOrderFillable(order) {
-    const chainid = order[0];
+    const chainId = order[0];
     const marketId = order[2];
     const market = MARKETS[marketId];
     const mmConfig = MM_CONFIG.pairs[marketId];
     const mmSide = mmConfig.side || 'd';
-    if (chainid != CHAIN_ID) return { fillable: false, reason: "badchain" }
+    if (chainId != CHAIN_ID) return { fillable: false, reason: "badchain" }
     if (!market) return { fillable: false, reason: "badmarket" }
     if (!mmConfig.active) return { fillable: false, reason: "inactivemarket" }
 
@@ -250,7 +250,7 @@ function isOrderFillable(order) {
 
     let quote;
     try {
-        quote = genquote(chainid, marketId, side, baseQuantity);
+        quote = genquote(chainId, marketId, side, baseQuantity);
     } catch (e) {
         return { fillable: false, reason: e.message }
     }
@@ -265,9 +265,9 @@ function isOrderFillable(order) {
     return { fillable: true, reason: null, wallets: goodWallets};
 }
 
-function genquote(chainid, marketId, side, baseQuantity) {
+function genquote(chainId, marketId, side, baseQuantity) {
     const market = MARKETS[marketId];
-    if (CHAIN_ID !== chainid) throw new Error("badchain");
+    if (CHAIN_ID !== chainId) throw new Error("badchain");
     if (!market) throw new Error("badmarket");
     if (!(['b','s']).includes(side)) throw new Error("badside");
     if (baseQuantity <= 0) throw new Error("badquantity");
@@ -380,7 +380,7 @@ async function sendfillrequest(orderreceipt, accountId) {
   zigzagws.send(JSON.stringify(resp));
 }
 
-async function broadcastfill(chainid, orderid, swapOffer, fillOrder, wallet) {
+async function broadcastfill(chainId, orderid, swapOffer, fillOrder, wallet) {
   // Nonce check
   const nonce = swapOffer.nonce;
   const userNonce = NONCES[swapOffer.accountId];
@@ -395,7 +395,7 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder, wallet) {
     nonce: fillOrder.nonce
   });
   const txhash = swap.txHash.split(":")[1];
-  const txhashmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,'b',txhash]]]}
+  const txhashmsg = {op:"orderstatusupdate", args:[[[chainId,orderid,'b',txhash]]]}
   zigzagws.send(JSON.stringify(txhashmsg));
   console.timeEnd('syncswap' + randint);
 
@@ -428,7 +428,7 @@ async function broadcastfill(chainid, orderid, swapOffer, fillOrder, wallet) {
 
   const newstatus = success ? 'f' : 'r';
   const error = success ? null : swap.error.toString();
-  const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainid,orderid,newstatus,txhash,error]]]}
+  const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainId,orderid,newstatus,txhash,error]]]}
   zigzagws.send(JSON.stringify(ordercommitmsg));
 }
 
