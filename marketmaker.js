@@ -71,24 +71,24 @@ try {
         });
     }
     for(let i=0; i<keys.length; i++) {
-      let ethWallet = new ethers.Wallet(keys[i]);
-      let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
-      if (!(await syncWallet.isSigningKeySet())) {
-          console.log("setting sign key");
-          const signKeyResult = await syncWallet.setSigningKey({
-              feeToken: "ETH",
-              ethAuthType: "ECDSA",
-          });
-          console.log(signKeyResult);
-      }
-      let accountId = await syncWallet.getAccountId();
-      let account_state = await syncWallet.getAccountState();
-      WALLETS[accountId] = {
-        'ethWallet': ethWallet,
-        'syncWallet': syncWallet,
-        'account_state': account_state,
-        'ORDER_BROADCASTING': false,
-      }
+        let ethWallet = new ethers.Wallet(keys[i]);
+        let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
+        if (!(await syncWallet.isSigningKeySet())) {
+            console.log("setting sign key");
+            const signKeyResult = await syncWallet.setSigningKey({
+                feeToken: "ETH",
+                ethAuthType: "ECDSA",
+            });
+            console.log(signKeyResult);
+        }
+        let accountId = await syncWallet.getAccountId();
+        let account_state = await syncWallet.getAccountState();
+        WALLETS[accountId] = {
+            'ethWallet': ethWallet,
+            'syncWallet': syncWallet,
+            'account_state': account_state,
+            'ORDER_BROADCASTING': false,
+        }
     }
 } catch (e) {
     console.log(e);
@@ -220,10 +220,10 @@ function isOrderFillable(order) {
     const neededBalanceBN = sellQuantity * 10**sellDecimals;
     const goodWallets = [];
     Object.keys(WALLETS).forEach(accountId => {
-      const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
-      if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
-          goodWallets.push(accountId);
-      }
+        const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
+        if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
+            goodWallets.push(accountId);
+        }
     });
     const now = Date.now() / 1000 | 0;
 
@@ -328,106 +328,106 @@ function validatePriceFeed(marketId) {
 }
 
 async function sendFillRequest(orderreceipt, accountId) {
-  const chainId = orderreceipt[0];
-  const orderId = orderreceipt[1];
-  const marketId = orderreceipt[2];
-  const market = MARKETS[marketId];
-  const baseCurrency = market.baseAssetId;
-  const quoteCurrency = market.quoteAssetId;
-  const side = orderreceipt[3];
-  const baseQuantity = orderreceipt[5];
-  const quoteQuantity = orderreceipt[6];
-  const quote = genQuote(chainId, marketId, side, baseQuantity);
-  let tokenSell, tokenBuy, sellQuantity, buyQuantity;
-  if (side === "b") {
-    tokenSell = market.baseAssetId;
-    tokenBuy = market.quoteAssetId;
-    // Add 1 bip to to protect against rounding errors
-    sellQuantity = (baseQuantity * 1.0001).toFixed(market.baseAsset.decimals);
-    buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
-  } else if (side === "s") {
-    tokenSell = market.quoteAssetId;
-    tokenBuy = market.baseAssetId;
-    // Add 1 bip to to protect against rounding errors
-    sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
-    buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
-  }
-  const sellQuantityParsed = syncProvider.tokenSet.parseToken(
-    tokenSell,
-    sellQuantity
-  );
-  const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(sellQuantityParsed);
-  const tokenRatio = {};
-  tokenRatio[tokenBuy] = buyQuantity;
-  tokenRatio[tokenSell] = sellQuantity;
-  const oneMinExpiry = (Date.now() / 1000 | 0) + 60;
-  const orderDetails = {
-    tokenSell,
-    tokenBuy,
-    amount: sellQuantityPacked,
-    ratio: zksync.utils.tokenRatio(tokenRatio),
-    validUntil: oneMinExpiry
-  }
-  const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
+    const chainId = orderreceipt[0];
+    const orderId = orderreceipt[1];
+    const marketId = orderreceipt[2];
+    const market = MARKETS[marketId];
+    const baseCurrency = market.baseAssetId;
+    const quoteCurrency = market.quoteAssetId;
+    const side = orderreceipt[3];
+    const baseQuantity = orderreceipt[5];
+    const quoteQuantity = orderreceipt[6];
+    const quote = genQuote(chainId, marketId, side, baseQuantity);
+    let tokenSell, tokenBuy, sellQuantity, buyQuantity;
+    if (side === "b") {
+        tokenSell = market.baseAssetId;
+        tokenBuy = market.quoteAssetId;
+        // Add 1 bip to to protect against rounding errors
+        sellQuantity = (baseQuantity * 1.0001).toFixed(market.baseAsset.decimals);
+        buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
+    } else if (side === "s") {
+        tokenSell = market.quoteAssetId;
+        tokenBuy = market.baseAssetId;
+        // Add 1 bip to to protect against rounding errors
+        sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
+        buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
+    }
+    const sellQuantityParsed = syncProvider.tokenSet.parseToken(
+        tokenSell,
+        sellQuantity
+    );
+    const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(sellQuantityParsed);
+    const tokenRatio = {};
+    tokenRatio[tokenBuy] = buyQuantity;
+    tokenRatio[tokenSell] = sellQuantity;
+    const oneMinExpiry = (Date.now() / 1000 | 0) + 60;
+    const orderDetails = {
+        tokenSell,
+        tokenBuy,
+        amount: sellQuantityPacked,
+        ratio: zksync.utils.tokenRatio(tokenRatio),
+        validUntil: oneMinExpiry
+    }
+    const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
 
-  // Set wallet flag
-  WALLETS[accountId]['ORDER_BROADCASTING'] = true;
+    // Set wallet flag
+    WALLETS[accountId]['ORDER_BROADCASTING'] = true;
 
-  rememberOrder(chainId, orderId, marketId, quote.quotePrice, fillOrder);
-  const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
-  zigzagws.send(JSON.stringify(resp));
+    rememberOrder(chainId, orderId, marketId, quote.quotePrice, fillOrder);
+    const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
+    zigzagws.send(JSON.stringify(resp));
 }
 
 async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
-  // Nonce check
-  const nonce = swapOffer.nonce;
-  const userNonce = NONCES[swapOffer.accountId];
-  if (nonce <= userNonce) {
-      throw new Error("badnonce");
-  }
-  const randInt = (Math.random()*1000).toFixed(0);
-  console.time('syncswap' + randInt);
-  const swap = await wallet['syncWallet'].syncSwap({
-    orders: [swapOffer, fillOrder],
-    feeToken: "ETH",
-    nonce: fillOrder.nonce
-  });
-  const txHash = swap.txHash.split(":")[1];
-  const txHashMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'b',txHash]]]}
-  zigzagws.send(JSON.stringify(txHashMsg));
-  console.timeEnd('syncswap' + randInt);
-
-  console.time('receipt' + randInt);
-  let receipt, success = false;
-  try {
-    receipt = await swap.awaitReceipt();
-    if (receipt.success) {
-        success = true;
-        NONCES[swapOffer.accountId] = swapOffer.nonce;
+    // Nonce check
+    const nonce = swapOffer.nonce;
+    const userNonce = NONCES[swapOffer.accountId];
+    if (nonce <= userNonce) {
+        throw new Error("badnonce");
     }
-  } catch (e) {
-    receipt = null;
-    success = false;
-  }
+    const randInt = (Math.random()*1000).toFixed(0);
+    console.time('syncswap' + randInt);
+    const swap = await wallet['syncWallet'].syncSwap({
+        orders: [swapOffer, fillOrder],
+        feeToken: "ETH",
+        nonce: fillOrder.nonce
+    });
+    const txHash = swap.txHash.split(":")[1];
+    const txHashMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'b',txHash]]]}
+    zigzagws.send(JSON.stringify(txHashMsg));
+    console.timeEnd('syncswap' + randInt);
+
+    console.time('receipt' + randInt);
+    let receipt, success = false;
+    try {
+        receipt = await swap.awaitReceipt();
+        if (receipt.success) {
+            success = true;
+            NONCES[swapOffer.accountId] = swapOffer.nonce;
+        }
+    } catch (e) {
+        receipt = null;
+        success = false;
+    }
   console.timeEnd('receipt' + randInt);
   console.log("Swap broadcast result", {swap, receipt});
 
-  if(success) {
-    const order = PAST_ORDER_LIST[orderId];
-    if(order) {
-      const marketId = order.market;
-      const mmConfig = MM_CONFIG.pairs[marketId];
-      if(mmConfig && mmConfig.delayAfterFill) {
-        mmConfig.active = false;
-        setTimeout(activatePair, mmConfig.delayAfterFill, marketId);
-      }
-    }
-  }
+    if(success) {
+        const order = PAST_ORDER_LIST[orderId];
+        if(order) {
+            const marketId = order.market;
+            const mmConfig = MM_CONFIG.pairs[marketId];
+            if(mmConfig && mmConfig.delayAfterFill) {
+                mmConfig.active = false;
+                setTimeout(activatePair, mmConfig.delayAfterFill, marketId);
+            }
+        }
+   }
 
-  const newStatus = success ? 'f' : 'r';
-  const error = success ? null : swap.error.toString();
-  const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
-  zigzagws.send(JSON.stringify(orderCommitMsg));
+    const newStatus = success ? 'f' : 'r';
+    const error = success ? null : swap.error.toString();
+    const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
+    zigzagws.send(JSON.stringify(orderCommitMsg));
 }
 
 async function fillOpenOrders() {
@@ -521,9 +521,9 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
     }
 
     const subscriptionMsg = {
-      "subscribe": {
-        "subscriptions": []
-      }
+        "subscribe": {
+            "subscriptions": []
+        }
     }
     for (let i in cryptowatchMarketIds) {
         const cryptowatchMarketId = cryptowatchMarketIds[i];
@@ -531,9 +531,9 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
         // first get initial price info
 
         subscriptionMsg.subscribe.subscriptions.push({
-          "streamSubscription": {
-            "resource": `markets:${cryptowatchMarketId}:trades`
-          }
+            "streamSubscription": {
+                "resource": `markets:${cryptowatchMarketId}:trades`
+            }
         })
     }
     let cryptowatch_ws = new WebSocket("wss://stream.cryptowat.ch/connect?apikey=" + cryptowatchApiKey);
@@ -553,7 +553,7 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
         let trades = msg.marketUpdate.tradesUpdate.trades;
         let price = trades[trades.length - 1].priceStr / 1;
         PRICE_FEEDS[marketId] = price;
-    };
+    }
     function onclose () {
         setTimeout(cryptowatchWsSetup, 5000, cryptowatchMarketIds);
     }
@@ -690,7 +690,7 @@ async function updateAccountState() {
             })
         });
     } catch(err) {
-      // pass
+        // pass
     }
 }
 
@@ -703,10 +703,10 @@ async function logBalance() {
             const committedBalaces = WALLETS[accountId]['account_state'].committed.balances;
             Object.keys(committedBalaces).forEach(token => {
                 if(balance[token]) {
-                balance[token] = balance[token] + parseInt(committedBalaces[token]);
-              } else {
-                  balance[token] = parseInt(committedBalaces[token]);
-              }
+                    balance[token] = balance[token] + parseInt(committedBalaces[token]);
+                } else {
+                    balance[token] = parseInt(committedBalaces[token]);
+                }
             });
         });
         // get token price and total in USD
@@ -722,6 +722,6 @@ async function logBalance() {
         const content = date + ";" + sum.toFixed(2) + "\n";
         fs.writeFile('price_csv.txt', content, { flag: 'a+' }, err => {});
     } catch(err) {
-      // pass
+        // pass
     }
 }
