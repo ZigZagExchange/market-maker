@@ -14,7 +14,7 @@ const NONCES = {};
 const WALLETS = {};
 const FILL_QUEUE = [];
 const MARKETS = {};
-const chainlinkProviders = {};
+const CHAINLINK_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 
 // coinlink interface ABI
@@ -566,7 +566,7 @@ async function chainlinkSetup(chainlink_market_address) {
         try {
             const provider = new ethers.Contract(address, aggregatorV3InterfaceABI, ethersProvider);
             const decimals = await provider.decimals();
-            chainlinkProviders['chainlink:'+address] = [provider, decimals];
+            CHAINLINK_PROVIDERS['chainlink:'+address] = [provider, decimals];
 
             // get inital price
             const response = await provider.latestRoundData();
@@ -579,8 +579,8 @@ async function chainlinkSetup(chainlink_market_address) {
 }
 
 async function chainlinkUpdate() {
-    await Promise.all(Object.keys(chainlinkProviders).map(async (key) => {
-        const [provider, decimals] = chainlinkProviders[key];
+    await Promise.all(Object.keys(CHAINLINK_PROVIDERS).map(async (key) => {
+        const [provider, decimals] = CHAINLINK_PROVIDERS[key];
         const response = await provider.latestRoundData();
         const price = parseFloat(response.answer) / 10**decimals;
     }));
