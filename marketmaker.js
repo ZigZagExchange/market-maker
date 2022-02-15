@@ -362,13 +362,13 @@ async function sendFillRequest(orderreceipt, accountId) {
   const tokenRatio = {};
   tokenRatio[tokenBuy] = buyQuantity;
   tokenRatio[tokenSell] = sellQuantity;
-  const one_min_expiry = (Date.now() / 1000 | 0) + 60;
+  const oneMinExpiry = (Date.now() / 1000 | 0) + 60;
   const orderDetails = {
     tokenSell,
     tokenBuy,
     amount: sellQuantityPacked,
     ratio: zksync.utils.tokenRatio(tokenRatio),
-    validUntil: one_min_expiry
+    validUntil: oneMinExpiry
   }
   const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
 
