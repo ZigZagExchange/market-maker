@@ -387,8 +387,8 @@ async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
   if (nonce <= userNonce) {
       throw new Error("badnonce");
   }
-  const randint = (Math.random()*1000).toFixed(0);
-  console.time('syncswap' + randint);
+  const randInt = (Math.random()*1000).toFixed(0);
+  console.time('syncswap' + randInt);
   const swap = await wallet['syncWallet'].syncSwap({
     orders: [swapOffer, fillOrder],
     feeToken: "ETH",
@@ -397,9 +397,9 @@ async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
   const txhash = swap.txHash.split(":")[1];
   const txhashmsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'b',txhash]]]}
   zigzagws.send(JSON.stringify(txhashmsg));
-  console.timeEnd('syncswap' + randint);
+  console.timeEnd('syncswap' + randInt);
 
-  console.time('receipt' + randint);
+  console.time('receipt' + randInt);
   let receipt, success = false;
   try {
     receipt = await swap.awaitReceipt();
@@ -411,7 +411,7 @@ async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
     receipt = null;
     success = false;
   }
-  console.timeEnd('receipt' + randint);
+  console.timeEnd('receipt' + randInt);
   console.log("Swap broadcast result", {swap, receipt});
 
   if(success) {
