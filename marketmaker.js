@@ -409,8 +409,8 @@ async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
         receipt = null;
         success = false;
     }
-  console.timeEnd('receipt' + randInt);
-  console.log("Swap broadcast result", {swap, receipt});
+    console.timeEnd('receipt' + randInt);
+    console.log("Swap broadcast result", {swap, receipt});
 
     if(success) {
         const order = PAST_ORDER_LIST[orderId];
@@ -419,7 +419,8 @@ async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
             const mmConfig = MM_CONFIG.pairs[marketId];
             if(mmConfig && mmConfig.delayAfterFill) {
                 mmConfig.active = false;
-                setTimeout(activatePair, mmConfig.delayAfterFill, marketId);
+                setTimeout(activatePair, mmConfig.delayAfterFill * 1000, market_id);
+                console.log(`Set ${market_id} passive for ${mmConfig.delayAfterFill} seconds.`)
             }
         }
    }
@@ -662,6 +663,7 @@ function activatePair(marketId) {
     const mmConfig = MM_CONFIG.pairs[marketId];
     if(!mmConfig) return;
     mmConfig.active = true;
+    console.log(`Set ${market_id} active.`)
 }
 
 function rememberOrder(chainId, orderId, market, price, fillOrder) {
