@@ -123,7 +123,7 @@ function onWsOpen() {
         }
     }
 }
-    
+
 function onWsClose () {
     console.log("Websocket closed. Restarting");
     Object.keys(WALLETS).forEach(accountId => {
@@ -234,7 +234,7 @@ function isOrderFillable(order) {
     if (mmSide !== 'd' && mmSide == side) {
         return { fillable: false, reason: "badside" };
     }
-    
+
     if (baseQuantity < mmConfig.minSize) {
         return { fillable: false, reason: "badsize" };
     }
@@ -309,7 +309,7 @@ function validatePriceFeed(market_id) {
     // Check if primary price exists
     const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
     if (!primaryPrice) throw new Error("Primary price feed unavailable");
-    
+
 
     // If there is no secondary price feed, the price auto-validates
     if (!secondaryPriceFeedId) return true;
