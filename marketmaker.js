@@ -507,16 +507,16 @@ async function setupPriceFeeds() {
 async function cryptowatchWsSetup(cryptowatchMarketIds) {
     // Set initial prices
     const cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
-    const cryptowatch_markets = await fetch("https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey).then(r => r.json());
-    const cryptowatch_market_prices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
+    const cryptowatchMarkets = await fetch("https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey).then(r => r.json());
+    const cryptowatchMarketPrices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
     for (let i in cryptowatchMarketIds) {
         const cryptowatchMarketId = cryptowatchMarketIds[i];
         try {
-            const cryptowatch_market = cryptowatch_markets.result.find(row => row.id == cryptowatchMarketId);
-            const exchange = cryptowatch_market.exchange;
-            const pair = cryptowatch_market.pair;
+            const cryptowatchMarket = cryptowatchMarkets.result.find(row => row.id == cryptowatchMarketId);
+            const exchange = cryptowatchMarket.exchange;
+            const pair = cryptowatchMarket.pair;
             const key = `market:${exchange}:${pair}`;
-            PRICE_FEEDS['cryptowatch:'+cryptowatchMarketIds[i]] = cryptowatch_market_prices.result[key];
+            PRICE_FEEDS['cryptowatch:'+cryptowatchMarketIds[i]] = cryptowatchMarketPrices.result[key];
         } catch (e) {
             console.error("Could not set price feed for cryptowatch:" + cryptowatchMarketId);
         }
