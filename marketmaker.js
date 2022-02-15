@@ -250,7 +250,7 @@ function isOrderFillable(order) {
 
     let quote;
     try {
-        quote = genquote(chainId, marketId, side, baseQuantity);
+        quote = genQuote(chainId, marketId, side, baseQuantity);
     } catch (e) {
         return { fillable: false, reason: e.message }
     }
@@ -265,7 +265,7 @@ function isOrderFillable(order) {
     return { fillable: true, reason: null, wallets: goodWallets};
 }
 
-function genquote(chainId, marketId, side, baseQuantity) {
+function genQuote(chainId, marketId, side, baseQuantity) {
     const market = MARKETS[marketId];
     if (CHAIN_ID !== chainId) throw new Error("badchain");
     if (!market) throw new Error("badmarket");
@@ -339,7 +339,7 @@ async function sendFillRequest(orderreceipt, accountId) {
   const side = orderreceipt[3];
   const baseQuantity = orderreceipt[5];
   const quoteQuantity = orderreceipt[6];
-  const quote = genquote(chainId, marketId, side, baseQuantity);
+  const quote = genQuote(chainId, marketId, side, baseQuantity);
   let tokenSell, tokenBuy, sellQuantity, buyQuantity;
   if (side === "b") {
     tokenSell = market.baseAssetId;
