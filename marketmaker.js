@@ -164,8 +164,8 @@ async function handleMessage(json) {
             });
             break
         case "userordermatch":
-            const chainid = msg.args[0];
-            const orderid = msg.args[1];
+            const chainId = msg.args[0];
+            const orderId = msg.args[1];
             const fillOrder = msg.args[3];
             const wallet = WALLETS[fillOrder.accountId];
             if(!wallet) {
@@ -173,7 +173,7 @@ async function handleMessage(json) {
                 break
             } else {
                 try {
-                    await broadcastfill(chainid, orderid, msg.args[2], fillOrder, wallet);
+                    await broadcastfill(chainId, orderId, msg.args[2], fillOrder, wallet);
                 } catch (e) {
                     console.error(e);
                 }
