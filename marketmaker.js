@@ -428,8 +428,8 @@ async function broadcastfill(chainId, orderId, swapOffer, fillOrder, wallet) {
 
   const newStatus = success ? 'f' : 'r';
   const error = success ? null : swap.error.toString();
-  const ordercommitmsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
-  zigzagws.send(JSON.stringify(ordercommitmsg));
+  const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
+  zigzagws.send(JSON.stringify(orderCommitMsg));
 }
 
 async function fillOpenOrders() {
