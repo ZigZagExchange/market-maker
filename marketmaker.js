@@ -420,6 +420,7 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
             if(mmConfig && mmConfig.delayAfterFill) {
                 mmConfig.active = false;
                 setTimeout(activatePair, mmConfig.delayAfterFill * 1000, marketId);
+                cancelLiquidity (chainId, marketId);
                 console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
             }
         }
@@ -643,6 +644,16 @@ function indicateLiquidity () {
             console.error("Could not send liquidity");
             console.error(e);
         }
+    }
+}
+
+function cancelLiquidity (chainId, marketId) {
+    const msg = { op: "indicateliq2", args: [chainId, marketId, [], CLIENT_ID] };
+    try {
+        zigzagws.send(JSON.stringify(msg));
+    } catch (e) {
+        console.error("Could not send liquidity");
+        console.error(e);
     }
 }
 
