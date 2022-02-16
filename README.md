@@ -119,7 +119,7 @@ A market can be set inactive by flipping the active switch to `false`.
 
 ###### delayAfterFill
 The market maker will stop market making on the pair, after successfully filling an order. This can be used to wait out bigger price moves.
-Example:
+Example, here a delay of **60 seconds** is used:
 ```
 "ETH-USDC": {
     "mode": "pricefeed",
@@ -131,7 +131,7 @@ Example:
     "minSize": 0.0003,
     "minSpread": 0.0005,
     "active": true,
-    "delayAfterFill": 60
+    "delayAfterFill": 60        <-
 }
 ```
 
