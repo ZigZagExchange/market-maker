@@ -373,9 +373,9 @@ async function sendFillRequest(orderreceipt, accountId) {
     // Set wallet flag
     WALLETS[accountId]['ORDER_BROADCASTING'] = true;
 
-    rememberOrder(chainId, orderId, marketId, quote.quotePrice, fillOrder);
     const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
     zigzagws.send(JSON.stringify(resp));
+    rememberOrder(chainId, orderId, marketId, quote.quotePrice, fillOrder);
 }
 
 async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
