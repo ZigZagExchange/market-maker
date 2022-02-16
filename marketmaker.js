@@ -581,9 +581,9 @@ async function chainlinkUpdate() {
 }
 
 const CLIENT_ID = (Math.random() * 100000).toString(16);
-function indicateLiquidity () {
-    for(const marketId in MM_CONFIG.pairs) {
-        const mmConfig = MM_CONFIG.pairs[marketId];
+function indicateLiquidity (pairs = MM_CONFIG.pairs) {
+    for(const marketId in pairs) {
+        const mmConfig = pairs[marketId];
         if(!mmConfig || !mmConfig.active) continue;
 
         try {
