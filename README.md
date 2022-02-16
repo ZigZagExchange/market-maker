@@ -117,6 +117,8 @@ A market can be set inactive by flipping the active switch to `false`.
 
 ## Pair Options
 
+These pair options can be set for each pair individual. You can even use more then on option per pair (though they might cancel each other out).
+
 ###### delayAfterFill
 The market maker will stop market making on the pair, after successfully filling an order. This can be used to wait out bigger price moves.
 Example, here a delay of **60 seconds** is used:
@@ -131,11 +133,27 @@ Example, here a delay of **60 seconds** is used:
     "minSize": 0.0003,
     "minSpread": 0.0005,
     "active": true,
-    "delayAfterFill": 60        <-
+    "delayAfterFill": 60        <- This would pause the pair for 60 sec after a fill.
 }
 ```
 
-
+###### increaseSpreadAfterFill
+The market maker increases the spread by the set amount. After the time (**in seconds**) the spread will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3).
+Example:
+```
+"ETH-USDC": {
+    "mode": "pricefeed",
+    "side": "b",
+    "priceFeedPrimary": "cryptowatch:6631",
+    "priceFeedSecondary": "cryptowatch:588",
+    "slippageRate": 1e-5,
+    "maxSize": 100,
+    "minSize": 0.0003,
+    "minSpread": 0.0005,
+    "active": true,
+    "increaseSpreadAfterFill": [0.1, 300]        <- This would increase the minSpread by 0.1 per fill for 300 sec each.
+}
+```
 ## Pair Setting Examples
 
 Stable-Stable constant price:

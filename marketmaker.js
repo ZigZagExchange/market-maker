@@ -677,9 +677,21 @@ async function afterFill(chainId, orderId) {
         setTimeout(function() {
             mmConfig.active = true;
             console.log(`Set ${marketId} active.`);
+            indicateLiquidity([mmConfig]);
         }, mmConfig.delayAfterFill * 1000);
     }
 
+    if(mmConfig.increaseSpreadAfterFill) {
+        const [spread, time] = mmConfig.increaseSpreadAfterFill;
+        mmConfig.minSpread = mmConfig.minSpread + spread;
+        console.log(`Increased ${marketId} minSpread by ${spread}.`);
+        indicateLiquidity([mmConfig]);
+        setTimeout(function() {
+            mmConfig.minSpread = mmConfig.minSpread - spread;
+            console.log(`Decreased ${marketId} minSpread by ${spread}.`);
+            indicateLiquidity([mmConfig]);
+        }, time * 1000);
+    }
 }
 
 function rememberOrder(chainId, orderId, market, price, fillOrder) {
