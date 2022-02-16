@@ -411,22 +411,16 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
     console.timeEnd('receipt' + randInt);
     console.log("Swap broadcast result", {swap, receipt});
 
+    let newStatus, error;
     if(success) {
-        const order = PAST_ORDER_LIST[orderId];
-        if(order) {
-            const marketId = order.market;
-            const mmConfig = MM_CONFIG.pairs[marketId];
-            if(mmConfig && mmConfig.delayAfterFill) {
-                mmConfig.active = false;
-                setTimeout(activatePair, mmConfig.delayAfterFill * 1000, marketId);
-                cancelLiquidity (chainId, marketId);
-                console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
-            }
-        }
+        afterFill(chainId, orderId);
+        newStatus = 'f';
+        error = null;
+   } else {
+        newStatus = 'r';
+        error = swap.error.toString();
    }
 
-    const newStatus = success ? 'f' : 'r';
-    const error = success ? null : swap.error.toString();
     const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
     zigzagws.send(JSON.stringify(orderCommitMsg));
 }
@@ -669,11 +663,23 @@ function getMidPrice (marketId) {
     return midPrice;
 }
 
-function activatePair(marketId) {
+async function afterFill(chainId, orderId) {
+    const order = PAST_ORDER_LIST[orderId];
+    if(!order) { return; }
+    const marketId = order.market;
     const mmConfig = MM_CONFIG.pairs[marketId];
-    if(!mmConfig) return;
-    mmConfig.active = true;
-    console.log(`Set ${marketId} active.`);
+    if(!mmConfig) { return; }
+
+    if(mmConfig.delayAfterFill) {
+        mmConfig.active = false;
+        cancelLiquidity (chainId, marketId);
+        console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
+        setTimeout(function() {
+            mmConfig.active = true;
+            console.log(`Set ${marketId} active.`);
+        }, mmConfig.delayAfterFill * 1000);
+    }
+
 }
 
 function rememberOrder(chainId, orderId, market, price, fillOrder) {
