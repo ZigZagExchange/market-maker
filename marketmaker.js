@@ -498,7 +498,7 @@ async function setupPriceFeeds() {
           }
       });
   }
-  if(chainlinkSetup.length) await chainlinkSetup(chainlink);
+  if(chainlink.length) await chainlinkSetup(chainlink);
   if(cryptowatch.length) await cryptowatchWsSetup(cryptowatch);
 
   console.log(PRICE_FEEDS);
