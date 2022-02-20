@@ -674,7 +674,7 @@ async function afterFill(chainId, orderId) {
         mmConfig.active = false;
         cancelLiquidity (chainId, marketId);
         console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
-        setTimeout(function() {
+        setTimeout(() => {
             mmConfig.active = true;
             console.log(`Set ${marketId} active.`);
             indicateLiquidity([mmConfig]);
@@ -686,9 +686,21 @@ async function afterFill(chainId, orderId) {
         mmConfig.minSpread = mmConfig.minSpread + spread;
         console.log(`Increased ${marketId} minSpread by ${spread}.`);
         indicateLiquidity([mmConfig]);
-        setTimeout(function() {
+        setTimeout(() => {
             mmConfig.minSpread = mmConfig.minSpread - spread;
             console.log(`Decreased ${marketId} minSpread by ${spread}.`);
+            indicateLiquidity([mmConfig]);
+        }, time * 1000);
+    }
+
+    if(mmConfig.increaseSizeAfterFill) {
+        const [size, time] = mmConfig.increaseSizeAfterFill;
+        mmConfig.maxSize = mmConfig.maxSize + size;
+        console.log(`Increased ${marketId} maxSize by ${size}.`);
+        indicateLiquidity([mmConfig]);
+        setTimeout(() => {
+            mmConfig.maxSize = mmConfig.maxSize - size;
+            console.log(`Decreased ${marketId} minSpread by ${size}.`);
             indicateLiquidity([mmConfig]);
         }, time * 1000);
     }

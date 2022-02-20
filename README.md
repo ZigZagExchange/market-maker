@@ -154,6 +154,26 @@ Example:
     "increaseSpreadAfterFill": [0.1, 300]        <- This would increase the minSpread by 0.1 per fill for 300 sec each.
 }
 ```
+
+###### increaseSizeAfterFill
+The market maker increases the size (**in base token**) by the set amount. After the time (**in seconds**) the size will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3).
+Example:
+```
+"ETH-USDC": {
+    "mode": "pricefeed",
+    "side": "b",
+    "priceFeedPrimary": "cryptowatch:6631",
+    "priceFeedSecondary": "cryptowatch:588",
+    "slippageRate": 1e-5,
+    "maxSize": 100,
+    "minSize": 0.0003,
+    "minSpread": 0.0005,
+    "active": true,
+    "increaseSizeAfterFill": [0.05, 300]        <- This would increase the maxSize by 0.05 ETH (base token) per fill for 300 sec each.
+}
+```
+
+
 ## Pair Setting Examples
 
 Stable-Stable constant price:
