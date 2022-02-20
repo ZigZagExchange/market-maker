@@ -95,7 +95,7 @@ try {
 }
 
 // Update account state loop
-setInterval(updateAccountState, 30000);
+setInterval(updateAccountState, 900000);
 
 // Log mm balance over all accounts
 logBalance();
@@ -425,7 +425,7 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
 
     let newStatus, error;
     if(success) {
-        afterFill(chainId, orderId);
+        afterFill(chainId, orderId, wallet);
         newStatus = 'f';
         error = null;
    } else {
@@ -675,12 +675,25 @@ function getMidPrice (marketId) {
     return midPrice;
 }
 
-async function afterFill(chainId, orderId) {
+async function afterFill(chainId, orderId, wallet) {
     const order = PAST_ORDER_LIST[orderId];
     if(!order) { return; }
     const marketId = order.marketId;
     const mmConfig = MM_CONFIG.pairs[marketId];
     if(!mmConfig) { return; }
+
+    // update account state from order
+    const account_state = wallet['account_state'].committed.balances;
+    const buyTokenParsed = syncProvider.tokenSet.parseToken (
+        order.buySymbol,
+        order.buyQuantity
+    );
+    const sellTokenParsed = syncProvider.tokenSet.parseToken (
+        order.sellSymbol,
+        order.sellQuantity
+    );
+    account_state[order.buySymbol] = account_state[order.buySymbol] + buyTokenParsed;
+    account_state[order.sellSymbol] = account_state[order.sellSymbol] - sellTokenParsed;
 
     if(mmConfig.delayAfterFill) {
         mmConfig.active = false;
