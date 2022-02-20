@@ -337,16 +337,20 @@ async function sendFillRequest(orderreceipt, accountId) {
     const baseQuantity = orderreceipt[5];
     const quoteQuantity = orderreceipt[6];
     const quote = genQuote(chainId, marketId, side, baseQuantity);
-    let tokenSell, tokenBuy, sellQuantity, buyQuantity;
+    let tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
     if (side === "b") {
         tokenSell = market.baseAssetId;
         tokenBuy = market.quoteAssetId;
+        sellSymbol = market.baseAsset.symbol;
+        buySymbol = market.quoteAsset.symbol;
         // Add 1 bip to to protect against rounding errors
         sellQuantity = (baseQuantity * 1.0001).toFixed(market.baseAsset.decimals);
         buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
     } else if (side === "s") {
         tokenSell = market.quoteAssetId;
         tokenBuy = market.baseAssetId;
+        sellSymbol = market.quoteAsset.symbol;
+        buySymbol = market.baseAsset.symbol;
         // Add 1 bip to to protect against rounding errors
         sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
         buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
@@ -374,7 +378,15 @@ async function sendFillRequest(orderreceipt, accountId) {
 
     const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
     zigzagws.send(JSON.stringify(resp));
-    rememberOrder(chainId, orderId, marketId, quote.quotePrice, fillOrder);
+    rememberOrder(chainId,
+        marketId,
+        orderId, 
+        quote.quotePrice, 
+        sellSymbol,
+        sellQuantity,
+        buySymbol,
+        buyQuantity
+    );
 }
 
 async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
@@ -666,7 +678,7 @@ function getMidPrice (marketId) {
 async function afterFill(chainId, orderId) {
     const order = PAST_ORDER_LIST[orderId];
     if(!order) { return; }
-    const marketId = order.market;
+    const marketId = order.marketId;
     const mmConfig = MM_CONFIG.pairs[marketId];
     if(!mmConfig) { return; }
 
@@ -706,7 +718,7 @@ async function afterFill(chainId, orderId) {
     }
 }
 
-function rememberOrder(chainId, orderId, market, price, fillOrder) {
+function rememberOrder(chainId, marketId, orderId, price, sellSymbol, sellQuantity, buySymbol, buyQuantity) {
     const timestamp = Date.now() / 1000;
     for (const [key, value] of Object.entries(PAST_ORDER_LIST)) {
         if (value['expiry'] < timestamp) {
@@ -717,9 +729,12 @@ function rememberOrder(chainId, orderId, market, price, fillOrder) {
     const expiry = timestamp + 900;
     PAST_ORDER_LIST[orderId] = {
         'chainId': chainId,
-        'market': market,
+        'marketId': marketId,
         'price': price,
-        'fillOrder': fillOrder,
+        'sellSymbol': sellSymbol,
+        'sellQuantity': sellQuantity,
+        'buySymbol': buySymbol,
+        'buyQuantity': buyQuantity,
         'expiry':expiry
     };
 }
