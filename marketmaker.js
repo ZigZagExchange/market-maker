@@ -276,7 +276,7 @@ function genQuote(chainId, marketId, side, baseQuantity) {
     if (mmConfig.side !== 'd' && mmConfig.side === side) {
         throw new Error("badside");
     }
-    const primaryPrice = getMidPrice(marketId);
+    const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
     if (!primaryPrice) throw new Error("badprice");
     const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
     let quoteQuantity;
@@ -294,14 +294,13 @@ function genQuote(chainId, marketId, side, baseQuantity) {
 
 function validatePriceFeed(marketId) {
     const mmConfig = MM_CONFIG.pairs[marketId];
-    const mode = mmConfig.mode || "pricefeed";
-    const initPrice = mmConfig.initPrice;
     const primaryPriceFeedId = mmConfig.priceFeedPrimary;
     const secondaryPriceFeedId = mmConfig.priceFeedSecondary;
 
-    // Constant mode checks
+    // Constant mode checks    
+    const [mode, price] = primaryPriceFeedId.split(':');
     if (mode === "constant") {
-        if (initPrice) return true;
+        if (price > 0) return true;
         else throw new Error("No initPrice available");
     }
 
@@ -321,6 +320,7 @@ function validatePriceFeed(marketId) {
     const percentDiff = Math.abs(primaryPrice - secondaryPrice) / primaryPrice;
     if (percentDiff > 0.03) {
         throw new Error("Circuit breaker triggered");
+        console.error("Primary and secondary price feeds do not match!");
     }
 
     return true;
@@ -484,9 +484,19 @@ async function processFillQueue() {
 async function setupPriceFeeds() {
   const cryptowatch = [], chainlink = [];
     for (let market in MM_CONFIG.pairs) {
-        if(!MM_CONFIG.pairs[market].active) { continue; }
-        const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
-        const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
+        const pairConfig = MM_CONFIG.pairs[market];
+        if(!pairConfig.active) { continue; }
+        const primaryPriceFeed = pairConfig.priceFeedPrimary;
+        const secondaryPriceFeed = pairConfig.priceFeedSecondary;
+
+        // This is needed to make the price feed backwards compatalbe with old constant mode:
+        // "DYDX-USDC": {
+        //      "mode": "constant",
+        //      "initPrice": 20,    
+        if(pairConfig.mode == "constant") {
+            const initPrice = pairConfig.initPrice;
+            pairConfig['priceFeedPrimary'] = "constant:" + initPrice.toString();
+        }
         [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
             if(!priceFeed) { return; }
             const [provider, id] = priceFeed.split(':');
@@ -612,7 +622,7 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         const marketInfo = MARKETS[marketId];
         if (!marketInfo) continue;
 
-        const midPrice = getMidPrice(marketId);
+        const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
         if (!midPrice) continue;
 
         const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
@@ -666,18 +676,6 @@ function cancelLiquidity (chainId, marketId) {
     }
 }
 
-function getMidPrice (marketId) {
-    const mmConfig = MM_CONFIG.pairs[marketId];
-    const mode = mmConfig.mode || "pricefeed";
-    let midPrice;
-    if (mode == "constant") {
-        midPrice = mmConfig.initPrice;
-    }
-    else if (mode == "pricefeed") {
-        midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
-    }
-    return midPrice;
-}
 
 async function afterFill(chainId, orderId, wallet) {
     const order = PAST_ORDER_LIST[orderId];
