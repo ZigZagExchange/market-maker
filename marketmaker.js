@@ -681,26 +681,26 @@ async function afterFill(chainId, orderId) {
         }, mmConfig.delayAfterFill * 1000);
     }
 
-    if(mmConfig.increaseSpreadAfterFill) {
-        const [spread, time] = mmConfig.increaseSpreadAfterFill;
+    if(mmConfig.changeSpreadAfterFill) {
+        const [spread, time] = mmConfig.changeSpreadAfterFill;
         mmConfig.minSpread = mmConfig.minSpread + spread;
-        console.log(`Increased ${marketId} minSpread by ${spread}.`);
+        console.log(`Changed ${marketId} minSpread by ${spread}.`);
         indicateLiquidity([mmConfig]);
         setTimeout(() => {
             mmConfig.minSpread = mmConfig.minSpread - spread;
-            console.log(`Decreased ${marketId} minSpread by ${spread}.`);
+            console.log(`Changed ${marketId} minSpread by ${(spread * (-1))}.`);
             indicateLiquidity([mmConfig]);
         }, time * 1000);
     }
 
-    if(mmConfig.increaseSizeAfterFill) {
-        const [size, time] = mmConfig.increaseSizeAfterFill;
+    if(mmConfig.changeSizeAfterFill) {
+        const [size, time] = mmConfig.changeSizeAfterFill;
         mmConfig.maxSize = mmConfig.maxSize + size;
-        console.log(`Increased ${marketId} maxSize by ${size}.`);
+        console.log(`Changed ${marketId} maxSize by ${size}.`);
         indicateLiquidity([mmConfig]);
         setTimeout(() => {
             mmConfig.maxSize = mmConfig.maxSize - size;
-            console.log(`Decreased ${marketId} minSpread by ${size}.`);
+            console.log(`Changed ${marketId} minSpread by ${(size* (-1))}.`);
             indicateLiquidity([mmConfig]);
         }, time * 1000);
     }

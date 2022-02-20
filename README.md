@@ -137,8 +137,8 @@ Example, here a delay of **60 seconds** is used:
 }
 ```
 
-###### increaseSpreadAfterFill
-The market maker increases the spread by the set amount. After the time (**in seconds**) the spread will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3).
+###### changeSpreadAfterFill
+The market maker increases the spread by the set amount. After the time (**in seconds**) the spread will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3). You can set a value below 0 to reduce spread after fill (like: [-0.1, 300]).
 Example:
 ```
 "ETH-USDC": {
@@ -151,12 +151,12 @@ Example:
     "minSize": 0.0003,
     "minSpread": 0.0005,
     "active": true,
-    "increaseSpreadAfterFill": [0.1, 300]        <- This would increase the minSpread by 0.1 per fill for 300 sec each.
+    "changeSpreadAfterFill": [0.1, 300]        <- This would increase the minSpread by 0.1 per fill for 300 sec each.
 }
 ```
 
-###### increaseSizeAfterFill
-The market maker increases the size (**in base token**) by the set amount. After the time (**in seconds**) the size will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3).
+###### changeSizeAfterFill
+The market maker increases the size (**in base token**) by the set amount. After the time (**in seconds**) the size will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3). You can set a value below 0 to reduce size after fill (like: [-0.1, 300]).
 Example:
 ```
 "ETH-USDC": {
@@ -169,7 +169,7 @@ Example:
     "minSize": 0.0003,
     "minSpread": 0.0005,
     "active": true,
-    "increaseSizeAfterFill": [0.05, 300]        <- This would increase the maxSize by 0.05 ETH (base token) per fill for 300 sec each.
+    "changeSizeAfterFill": [0.05, 300]        <- This would increase the maxSize by 0.05 ETH (base token) per fill for 300 sec each.
 }
 ```
 
