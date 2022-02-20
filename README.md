@@ -139,8 +139,8 @@ Example, here a delay of **60 seconds** is used:
 }
 ```
 
-###### changeSpreadAfterFill
-The market maker increases the spread by the set amount. After the time (**in seconds**) the spread will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3). You can set a value below 0 to reduce spread after fill (like: [-0.1, 300]).
+###### increaseSpreadAfterFill
+The market maker increases the spread by the set amount. After the time (**in seconds**) the spread will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3).
 Example:
 ```
 "ETH-USDC": {
@@ -153,7 +153,7 @@ Example:
     "minSize": 0.0003,
     "minSpread": 0.0005,
     "active": true,
-    "changeSpreadAfterFill": [0.1, 300]        <- This would increase the minSpread by 0.1 per fill for 300 sec each.
+    "increaseSpreadAfterFill": [0.1, 300]        <- This would increase the minSpread by 0.1 per fill for 300 sec each.
 }
 ```
 

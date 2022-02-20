@@ -203,7 +203,7 @@ function isOrderFillable(order) {
     const marketId = order[2];
     const market = MARKETS[marketId];
     const mmConfig = MM_CONFIG.pairs[marketId];
-    const mmSide = mmConfig.side || 'd';
+    const mmSide = (mmConfig.side) ? mmConfig.side : 'd';
     if (chainId != CHAIN_ID) return { fillable: false, reason: "badchain" }
     if (!market) return { fillable: false, reason: "badmarket" }
     if (!mmConfig.active) return { fillable: false, reason: "inactivemarket" }
@@ -500,8 +500,7 @@ async function setupPriceFeeds() {
         [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
             if(!priceFeed) { return; }
             const [provider, id] = priceFeed.split(':');
-            provider = provider.toLowerCase();
-            switch(provider) {
+            switch(provider.toLowerCase()) {
                 case 'cryptowatch':
                     if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
                     break;
@@ -676,7 +675,6 @@ function cancelLiquidity (chainId, marketId) {
     }
 }
 
-
 async function afterFill(chainId, orderId, wallet) {
     const order = PAST_ORDER_LIST[orderId];
     if(!order) { return; }
@@ -693,10 +691,14 @@ async function afterFill(chainId, orderId, wallet) {
     const sellTokenParsed = syncProvider.tokenSet.parseToken (
         order.sellSymbol,
         order.sellQuantity
-    );
-    account_state[order.buySymbol] = account_state[order.buySymbol] + buyTokenParsed;
-    account_state[order.sellSymbol] = account_state[order.sellSymbol] - sellTokenParsed;
-
+    );    
+    const oldbuyTokenParsed = ethers.BigNumber.from(account_state[order.buySymbol]);
+    const oldsellTokenParsed = ethers.BigNumber.from(account_state[order.sellSymbol]);
+    account_state[order.buySymbol] = (oldbuyTokenParsed.add(buyTokenParsed)).toString();
+    account_state[order.sellSymbol] = (oldsellTokenParsed.sub(sellTokenParsed)).toString();
+    
+    const indicateMarket = {};
+    indicateMarket[marketId] = mmConfig;
     if(mmConfig.delayAfterFill) {
         mmConfig.active = false;
         cancelLiquidity (chainId, marketId);
@@ -704,19 +706,19 @@ async function afterFill(chainId, orderId, wallet) {
         setTimeout(() => {
             mmConfig.active = true;
             console.log(`Set ${marketId} active.`);
-            indicateLiquidity([mmConfig]);
+            indicateLiquidity(indicateMarket);
         }, mmConfig.delayAfterFill * 1000);
     }
 
-    if(mmConfig.changeSpreadAfterFill) {
-        const [spread, time] = mmConfig.changeSpreadAfterFill;
+    if(mmConfig.increaseSpreadAfterFill) {
+        const [spread, time] = mmConfig.increaseSpreadAfterFill;
         mmConfig.minSpread = mmConfig.minSpread + spread;
         console.log(`Changed ${marketId} minSpread by ${spread}.`);
-        indicateLiquidity([mmConfig]);
+        indicateLiquidity(indicateMarket);
         setTimeout(() => {
             mmConfig.minSpread = mmConfig.minSpread - spread;
-            console.log(`Changed ${marketId} minSpread by ${(spread * (-1))}.`);
-            indicateLiquidity([mmConfig]);
+            console.log(`Changed ${marketId} minSpread by -${spread}.`);
+            indicateLiquidity(indicateMarket);
         }, time * 1000);
     }
 
@@ -724,11 +726,11 @@ async function afterFill(chainId, orderId, wallet) {
         const [size, time] = mmConfig.changeSizeAfterFill;
         mmConfig.maxSize = mmConfig.maxSize + size;
         console.log(`Changed ${marketId} maxSize by ${size}.`);
-        indicateLiquidity([mmConfig]);
+        indicateLiquidity(indicateMarket);
         setTimeout(() => {
             mmConfig.maxSize = mmConfig.maxSize - size;
             console.log(`Changed ${marketId} minSpread by ${(size* (-1))}.`);
-            indicateLiquidity([mmConfig]);
+            indicateLiquidity(indicateMarket);
         }, time * 1000);
     }
 }
