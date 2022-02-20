@@ -484,22 +484,23 @@ async function processFillQueue() {
 async function setupPriceFeeds() {
   const cryptowatch = [], chainlink = [];
     for (let market in MM_CONFIG.pairs) {
-      if(!MM_CONFIG.pairs[market].active) { continue; }
-      const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
-      const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
-      [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
-          if(!priceFeed) { return; }
-          const [provider, id] = priceFeed.split(':');
-          switch(provider) {
-              case 'cryptowatch':
-                  if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
-                  break;
-              case 'chainlink':
-                  if(!chainlink.includes(id)) { chainlink.push(id); }
-                  break;
-              default:
-                  throw new Error("Price feed provider "+provider+" is not available.")
-                  break;
+        if(!MM_CONFIG.pairs[market].active) { continue; }
+        const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
+        const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
+        [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
+            if(!priceFeed) { return; }
+            const [provider, id] = priceFeed.split(':');
+            switch(provider) {
+                case 'cryptowatch':
+                    if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
+                    break;
+                case 'chainlink':
+                    if(!chainlink.includes(id)) { chainlink.push(id); }
+                    break;
+                
+                default:
+                    throw new Error("Price feed provider "+provider+" is not available.")
+                    break;
           }
       });
   }
