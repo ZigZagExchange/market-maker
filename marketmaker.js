@@ -294,10 +294,10 @@ function genQuote(chainId, marketId, side, baseQuantity) {
 
 function validatePriceFeed(marketId) {
     const mmConfig = MM_CONFIG.pairs[marketId];
-    const mode = MM_CONFIG.pairs[marketId].mode || "pricefeed";
-    const initPrice = MM_CONFIG.pairs[marketId].initPrice;
-    const primaryPriceFeedId = MM_CONFIG.pairs[marketId].priceFeedPrimary;
-    const secondaryPriceFeedId = MM_CONFIG.pairs[marketId].priceFeedSecondary;
+    const mode = mmConfig.mode || "pricefeed";
+    const initPrice = mmConfig.initPrice;
+    const primaryPriceFeedId = mmConfig.priceFeedPrimary;
+    const secondaryPriceFeedId = mmConfig.priceFeedSecondary;
 
     // Constant mode checks
     if (mode === "constant") {
