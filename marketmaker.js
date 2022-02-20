@@ -490,6 +490,7 @@ async function setupPriceFeeds() {
         [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
             if(!priceFeed) { return; }
             const [provider, id] = priceFeed.split(':');
+            provider = provider.toLowerCase();
             switch(provider) {
                 case 'cryptowatch':
                     if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
@@ -497,7 +498,9 @@ async function setupPriceFeeds() {
                 case 'chainlink':
                     if(!chainlink.includes(id)) { chainlink.push(id); }
                     break;
-                
+                case 'constant':
+                    PRICE_FEEDS['constant:'+id] = parseFloat(id);
+                    break;
                 default:
                     throw new Error("Price feed provider "+provider+" is not available.")
                     break;
