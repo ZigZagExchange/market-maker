@@ -394,7 +394,9 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
     const nonce = swapOffer.nonce;
     const userNonce = NONCES[swapOffer.accountId];
     if (nonce <= userNonce) {
-        throw new Error("badnonce");
+        const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'r',null,"Order failed userNonce check."]]]}
+        zigzagws.send(JSON.stringify(orderCommitMsg));
+        return;
     }
     const randInt = (Math.random()*1000).toFixed(0);
     console.time('syncswap' + randInt);
