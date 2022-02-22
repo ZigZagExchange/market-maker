@@ -731,7 +731,7 @@ async function afterFill(chainId, orderId, wallet) {
         indicateLiquidity(indicateMarket);
         setTimeout(() => {
             mmConfig.maxSize = mmConfig.maxSize - size;
-            console.log(`Changed ${marketId} minSpread by ${(size* (-1))}.`);
+            console.log(`Changed ${marketId} maxSize by ${(size* (-1))}.`);
             indicateLiquidity(indicateMarket);
         }, time * 1000);
     }
