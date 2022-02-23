@@ -17,7 +17,6 @@ const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 
-
 // Load MM config
 let MM_CONFIG;
 if (process.env.MM_CONFIG) {
@@ -96,7 +95,7 @@ try {
 }
 
 // Update account state loop
-setInterval(updateAccountState, 30000);
+setInterval(updateAccountState, 900000);
 
 // Log mm balance over all accounts
 logBalance();
@@ -204,7 +203,7 @@ function isOrderFillable(order) {
     const marketId = order[2];
     const market = MARKETS[marketId];
     const mmConfig = MM_CONFIG.pairs[marketId];
-    const mmSide = mmConfig.side || 'd';
+    const mmSide = (mmConfig.side) ? mmConfig.side : 'd';
     if (chainId != CHAIN_ID) return { fillable: false, reason: "badchain" }
     if (!market) return { fillable: false, reason: "badmarket" }
     if (!mmConfig.active) return { fillable: false, reason: "inactivemarket" }
@@ -277,7 +276,7 @@ function genQuote(chainId, marketId, side, baseQuantity) {
     if (mmConfig.side !== 'd' && mmConfig.side === side) {
         throw new Error("badside");
     }
-    const primaryPrice = getMidPrice(marketId);
+    const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
     if (!primaryPrice) throw new Error("badprice");
     const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
     let quoteQuantity;
@@ -295,14 +294,13 @@ function genQuote(chainId, marketId, side, baseQuantity) {
 
 function validatePriceFeed(marketId) {
     const mmConfig = MM_CONFIG.pairs[marketId];
-    const mode = MM_CONFIG.pairs[marketId].mode || "pricefeed";
-    const initPrice = MM_CONFIG.pairs[marketId].initPrice;
-    const primaryPriceFeedId = MM_CONFIG.pairs[marketId].priceFeedPrimary;
-    const secondaryPriceFeedId = MM_CONFIG.pairs[marketId].priceFeedSecondary;
+    const primaryPriceFeedId = mmConfig.priceFeedPrimary;
+    const secondaryPriceFeedId = mmConfig.priceFeedSecondary;
 
-    // Constant mode checks
+    // Constant mode checks    
+    const [mode, price] = primaryPriceFeedId.split(':');
     if (mode === "constant") {
-        if (initPrice) return true;
+        if (price > 0) return true;
         else throw new Error("No initPrice available");
     }
 
@@ -322,6 +320,7 @@ function validatePriceFeed(marketId) {
     const percentDiff = Math.abs(primaryPrice - secondaryPrice) / primaryPrice;
     if (percentDiff > 0.03) {
         throw new Error("Circuit breaker triggered");
+        console.error("Primary and secondary price feeds do not match!");
     }
 
     return true;
@@ -338,16 +337,20 @@ async function sendFillRequest(orderreceipt, accountId) {
     const baseQuantity = orderreceipt[5];
     const quoteQuantity = orderreceipt[6];
     const quote = genQuote(chainId, marketId, side, baseQuantity);
-    let tokenSell, tokenBuy, sellQuantity, buyQuantity;
+    let tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
     if (side === "b") {
         tokenSell = market.baseAssetId;
         tokenBuy = market.quoteAssetId;
+        sellSymbol = market.baseAsset.symbol;
+        buySymbol = market.quoteAsset.symbol;
         // Add 1 bip to to protect against rounding errors
         sellQuantity = (baseQuantity * 1.0001).toFixed(market.baseAsset.decimals);
         buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
     } else if (side === "s") {
         tokenSell = market.quoteAssetId;
         tokenBuy = market.baseAssetId;
+        sellSymbol = market.quoteAsset.symbol;
+        buySymbol = market.baseAsset.symbol;
         // Add 1 bip to to protect against rounding errors
         sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
         buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
@@ -375,7 +378,15 @@ async function sendFillRequest(orderreceipt, accountId) {
 
     const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
     zigzagws.send(JSON.stringify(resp));
-    rememberOrder(chainId, orderId, marketId, quote.quotePrice, fillOrder);
+    rememberOrder(chainId,
+        marketId,
+        orderId, 
+        quote.quotePrice, 
+        sellSymbol,
+        sellQuantity,
+        buySymbol,
+        buyQuantity
+    );
 }
 
 async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
@@ -383,7 +394,9 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
     const nonce = swapOffer.nonce;
     const userNonce = NONCES[swapOffer.accountId];
     if (nonce <= userNonce) {
-        throw new Error("badnonce");
+        const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'r',null,"Order failed userNonce check."]]]}
+        zigzagws.send(JSON.stringify(orderCommitMsg));
+        return;
     }
     const randInt = (Math.random()*1000).toFixed(0);
     console.time('syncswap' + randInt);
@@ -412,22 +425,16 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
     console.timeEnd('receipt' + randInt);
     console.log("Swap broadcast result", {swap, receipt});
 
+    let newStatus, error;
     if(success) {
-        const order = PAST_ORDER_LIST[orderId];
-        if(order) {
-            const marketId = order.market;
-            const mmConfig = MM_CONFIG.pairs[marketId];
-            if(mmConfig && mmConfig.delayAfterFill) {
-                mmConfig.active = false;
-                setTimeout(activatePair, mmConfig.delayAfterFill * 1000, marketId);
-                cancelLiquidity (chainId, marketId);
-                console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
-            }
-        }
+        afterFill(chainId, orderId, wallet);
+        newStatus = 'f';
+        error = null;
+   } else {
+        newStatus = 'r';
+        error = swap.error.toString();
    }
 
-    const newStatus = success ? 'f' : 'r';
-    const error = success ? null : swap.error.toString();
     const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
     zigzagws.send(JSON.stringify(orderCommitMsg));
 }
@@ -479,22 +486,35 @@ async function processFillQueue() {
 async function setupPriceFeeds() {
   const cryptowatch = [], chainlink = [];
     for (let market in MM_CONFIG.pairs) {
-      if(!MM_CONFIG.pairs[market].active) { continue; }
-      const primaryPriceFeed = MM_CONFIG.pairs[market].priceFeedPrimary;
-      const secondaryPriceFeed = MM_CONFIG.pairs[market].priceFeedSecondary;
-      [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
-          if(!priceFeed) { return; }
-          const [provider, id] = priceFeed.split(':');
-          switch(provider) {
-              case 'cryptowatch':
-                  if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
-                  break;
-              case 'chainlink':
-                  if(!chainlink.includes(id)) { chainlink.push(id); }
-                  break;
-              default:
-                  throw new Error("Price feed provider "+provider+" is not available.")
-                  break;
+        const pairConfig = MM_CONFIG.pairs[market];
+        if(!pairConfig.active) { continue; }
+        const primaryPriceFeed = pairConfig.priceFeedPrimary;
+        const secondaryPriceFeed = pairConfig.priceFeedSecondary;
+
+        // This is needed to make the price feed backwards compatalbe with old constant mode:
+        // "DYDX-USDC": {
+        //      "mode": "constant",
+        //      "initPrice": 20,    
+        if(pairConfig.mode == "constant") {
+            const initPrice = pairConfig.initPrice;
+            pairConfig['priceFeedPrimary'] = "constant:" + initPrice.toString();
+        }
+        [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
+            if(!priceFeed) { return; }
+            const [provider, id] = priceFeed.split(':');
+            switch(provider.toLowerCase()) {
+                case 'cryptowatch':
+                    if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
+                    break;
+                case 'chainlink':
+                    if(!chainlink.includes(id)) { chainlink.push(id); }
+                    break;
+                case 'constant':
+                    PRICE_FEEDS['constant:'+id] = parseFloat(id);
+                    break;
+                default:
+                    throw new Error("Price feed provider "+provider+" is not available.")
+                    break;
           }
       });
   }
@@ -588,9 +608,9 @@ async function chainlinkUpdate() {
 }
 
 const CLIENT_ID = (Math.random() * 100000).toString(16);
-function indicateLiquidity () {
-    for(const marketId in MM_CONFIG.pairs) {
-        const mmConfig = MM_CONFIG.pairs[marketId];
+function indicateLiquidity (pairs = MM_CONFIG.pairs) {
+    for(const marketId in pairs) {
+        const mmConfig = pairs[marketId];
         if(!mmConfig || !mmConfig.active) continue;
 
         try {
@@ -603,7 +623,7 @@ function indicateLiquidity () {
         const marketInfo = MARKETS[marketId];
         if (!marketInfo) continue;
 
-        const midPrice = getMidPrice(marketId);
+        const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
         if (!midPrice) continue;
 
         const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
@@ -657,27 +677,67 @@ function cancelLiquidity (chainId, marketId) {
     }
 }
 
-function getMidPrice (marketId) {
+async function afterFill(chainId, orderId, wallet) {
+    const order = PAST_ORDER_LIST[orderId];
+    if(!order) { return; }
+    const marketId = order.marketId;
     const mmConfig = MM_CONFIG.pairs[marketId];
-    const mode = mmConfig.mode || "pricefeed";
-    let midPrice;
-    if (mode == "constant") {
-        midPrice = mmConfig.initPrice;
+    if(!mmConfig) { return; }
+
+    // update account state from order
+    const account_state = wallet['account_state'].committed.balances;
+    const buyTokenParsed = syncProvider.tokenSet.parseToken (
+        order.buySymbol,
+        order.buyQuantity
+    );
+    const sellTokenParsed = syncProvider.tokenSet.parseToken (
+        order.sellSymbol,
+        order.sellQuantity
+    );    
+    const oldbuyTokenParsed = ethers.BigNumber.from(account_state[order.buySymbol]);
+    const oldsellTokenParsed = ethers.BigNumber.from(account_state[order.sellSymbol]);
+    account_state[order.buySymbol] = (oldbuyTokenParsed.add(buyTokenParsed)).toString();
+    account_state[order.sellSymbol] = (oldsellTokenParsed.sub(sellTokenParsed)).toString();
+    
+    const indicateMarket = {};
+    indicateMarket[marketId] = mmConfig;
+    if(mmConfig.delayAfterFill) {
+        mmConfig.active = false;
+        cancelLiquidity (chainId, marketId);
+        console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
+        setTimeout(() => {
+            mmConfig.active = true;
+            console.log(`Set ${marketId} active.`);
+            indicateLiquidity(indicateMarket);
+        }, mmConfig.delayAfterFill * 1000);
     }
-    else if (mode == "pricefeed") {
-        midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+
+    if(mmConfig.increaseSpreadAfterFill) {
+        const [spread, time] = mmConfig.increaseSpreadAfterFill;
+        mmConfig.minSpread = mmConfig.minSpread + spread;
+        console.log(`Changed ${marketId} minSpread by ${spread}.`);
+        indicateLiquidity(indicateMarket);
+        setTimeout(() => {
+            mmConfig.minSpread = mmConfig.minSpread - spread;
+            console.log(`Changed ${marketId} minSpread by -${spread}.`);
+            indicateLiquidity(indicateMarket);
+        }, time * 1000);
     }
-    return midPrice;
+
+    if(mmConfig.changeSizeAfterFill) {
+        const [size, time] = mmConfig.changeSizeAfterFill;
+        mmConfig.maxSize = mmConfig.maxSize + size;
+        console.log(`Changed ${marketId} maxSize by ${size}.`);
+        indicateLiquidity(indicateMarket);
+        setTimeout(() => {
+            mmConfig.maxSize = mmConfig.maxSize - size;
+            console.log(`Changed ${marketId} maxSize by ${(size* (-1))}.`);
+            indicateLiquidity(indicateMarket);
+        }, time * 1000);
+    }
 }
 
-function activatePair(marketId) {
-    const mmConfig = MM_CONFIG.pairs[marketId];
-    if(!mmConfig) return;
-    mmConfig.active = true;
-    console.log(`Set ${marketId} active.`);
-}
-
-function rememberOrder(chainId, orderId, market, price, fillOrder) {
+function rememberOrder(chainId, marketId, orderId, price, sellSymbol, sellQuantity, buySymbol, buyQuantity) {
     const timestamp = Date.now() / 1000;
     for (const [key, value] of Object.entries(PAST_ORDER_LIST)) {
         if (value['expiry'] < timestamp) {
@@ -688,9 +748,12 @@ function rememberOrder(chainId, orderId, market, price, fillOrder) {
     const expiry = timestamp + 900;
     PAST_ORDER_LIST[orderId] = {
         'chainId': chainId,
-        'market': market,
+        'marketId': marketId,
         'price': price,
-        'fillOrder': fillOrder,
+        'sellSymbol': sellSymbol,
+        'sellQuantity': sellQuantity,
+        'buySymbol': buySymbol,
+        'buyQuantity': buyQuantity,
         'expiry':expiry
     };
 }
