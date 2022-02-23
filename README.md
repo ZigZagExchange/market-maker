@@ -114,6 +114,7 @@ With constant mode, you can set a fixed price to market make. The bot will not c
     "side": "d",
     "priceFeedPrimary": "constant:1",
     "priceFeedSecondary": null,
+    ...
 }
 ```
 
