@@ -488,9 +488,6 @@ async function setupPriceFeeds() {
     for (let market in MM_CONFIG.pairs) {
         const pairConfig = MM_CONFIG.pairs[market];
         if(!pairConfig.active) { continue; }
-        const primaryPriceFeed = pairConfig.priceFeedPrimary;
-        const secondaryPriceFeed = pairConfig.priceFeedSecondary;
-
         // This is needed to make the price feed backwards compatalbe with old constant mode:
         // "DYDX-USDC": {
         //      "mode": "constant",
@@ -499,6 +496,8 @@ async function setupPriceFeeds() {
             const initPrice = pairConfig.initPrice;
             pairConfig['priceFeedPrimary'] = "constant:" + initPrice.toString();
         }
+        const primaryPriceFeed = pairConfig.priceFeedPrimary;
+        const secondaryPriceFeed = pairConfig.priceFeedSecondary;
         [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
             if(!priceFeed) { return; }
             const [provider, id] = priceFeed.split(':');
