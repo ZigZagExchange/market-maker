@@ -152,7 +152,7 @@ async function handleMessage(json) {
                 const fillable = isOrderFillable(order);
                 console.log(fillable);
                 if (fillable.fillable) {
-                    sendFillRequest(order, fillable.wallets);
+                    sendFillRequest(order, fillable.wallet);
                 }
                 else if (fillable.reason === "badprice") {
                     OPEN_ORDERS[orderId] = order;
@@ -223,6 +223,21 @@ function isOrderFillable(order) {
             goodWallets.push(accountId);
         }
     });
+
+    if (goodWallets.length === 0) {
+        return { fillable: false, reason: "badbalance" };
+    }
+
+    goodWallets.forEach(accountId => {
+        if(WALLETS[accountId]['ORDER_BROADCASTING'] == true) {
+            goodWallets.delete(accountId);
+        }
+    })    
+
+    if (goodWallets.length === 0) {
+        return { fillable: false, reason: "sending order already " };
+    }
+
     const now = Date.now() / 1000 | 0;
 
     if (now > expires) {
@@ -240,10 +255,6 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "badsize" };
     }
 
-    if (goodWallets.length === 0) {
-        return { fillable: false, reason: "badbalance" };
-    }
-
     let quote;
     try {
         quote = genQuote(chainId, marketId, side, baseQuantity);
@@ -258,7 +269,7 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "badprice" };
     }
 
-    return { fillable: true, reason: null, wallets: goodWallets};
+    return { fillable: true, reason: null, wallet: goodWallets[0]};
 }
 
 function genQuote(chainId, marketId, side, baseQuantity) {
