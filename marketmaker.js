@@ -606,7 +606,6 @@ async function chainlinkUpdate() {
     }));
 }
 
-const CLIENT_ID = (Math.random() * 100000).toString(16);
 function indicateLiquidity (pairs = MM_CONFIG.pairs) {
     for(const marketId in pairs) {
         const mmConfig = pairs[marketId];
@@ -656,7 +655,7 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
                 liquidity.push(["s", sellPrice, maxSellSize / splits, expires]);
             }
         }
-        const msg = { op: "indicateliq2", args: [CHAIN_ID, marketId, liquidity, CLIENT_ID] };
+        const msg = { op: "indicateliq2", args: [CHAIN_ID, marketId, liquidity] };
         try {
             zigzagws.send(JSON.stringify(msg));
         } catch (e) {
@@ -667,7 +666,7 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
 }
 
 function cancelLiquidity (chainId, marketId) {
-    const msg = { op: "indicateliq2", args: [chainId, marketId, [], CLIENT_ID] };
+    const msg = { op: "indicateliq2", args: [chainId, marketId, []] };
     try {
         zigzagws.send(JSON.stringify(msg));
     } catch (e) {
