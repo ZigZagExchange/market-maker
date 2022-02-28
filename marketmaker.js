@@ -273,7 +273,7 @@ function genQuote(chainId, marketId, side, baseQuantity) {
 
     const mmConfig = MM_CONFIG.pairs[marketId];
     const mmSide = mmConfig.side || 'd';
-    if (mmConfig.side !== 'd' && mmConfig.side === side) {
+    if (mmSide !== 'd' && mmSide === side) {
         throw new Error("badside");
     }
     const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
