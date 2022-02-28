@@ -12,7 +12,6 @@ const PRICE_FEEDS = {};
 const OPEN_ORDERS = {};
 const NONCES = {};
 const WALLETS = {};
-const FILL_QUEUE = [];
 const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
@@ -153,7 +152,7 @@ async function handleMessage(json) {
                 const fillable = isOrderFillable(order);
                 console.log(fillable);
                 if (fillable.fillable) {
-                    FILL_QUEUE.push({ order: order, wallets: fillable.wallets});
+                    sendFillRequest(order, fillable.wallets);
                 }
                 else if (fillable.reason === "badprice") {
                     OPEN_ORDERS[orderId] = order;
@@ -444,43 +443,13 @@ async function fillOpenOrders() {
         const order = OPEN_ORDERS[orderId];
         const fillable = isOrderFillable(order);
         if (fillable.fillable) {
-            FILL_QUEUE.push({ order: order, wallets: fillable.wallets});
+            sendFillRequest(order, fillable.wallets);
             delete OPEN_ORDERS[orderId];
         }
         else if (fillable.reason !== "badprice") {
             delete OPEN_ORDERS[orderId];
         }
     }
-}
-
-async function processFillQueue() {
-    if (FILL_QUEUE.length === 0) {
-        setTimeout(processFillQueue, 100);
-        return;
-    }
-    await Promise.all(Object.keys(WALLETS).map(async accountId => {
-        const wallet = WALLETS[accountId];
-        if (wallet['ORDER_BROADCASTING']) {
-            return;
-        }
-        let index = 0;
-        for(;index<FILL_QUEUE.length; index++) {
-            if(FILL_QUEUE[index].wallets.includes(accountId)) {
-                break;
-            }
-        }
-        if (index < FILL_QUEUE.length) {
-            const selectedOrder = FILL_QUEUE.splice(index, 1);
-            try {
-                await sendFillRequest(selectedOrder[0].order, accountId);
-                return;
-            } catch (e) {
-                console.error(e);
-                wallet['ORDER_BROADCASTING'] = false;
-            }
-        }
-    }));
-    setTimeout(processFillQueue, 100);
 }
 
 async function setupPriceFeeds() {
