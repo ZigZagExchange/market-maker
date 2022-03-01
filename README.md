@@ -91,11 +91,12 @@ Example:
 ###### Chainlink
 With chainlink you have access to price oracles via blockchain. The requests are read calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). There you can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
 ```
-....
-"infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
-"zigzagChainId": 1,
-"zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
-....
+"ETH-USDC": {
+    "infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
+    "zigzagChainId": 1,
+    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+    ....
+}
 ```
 You can get the available market contracts [here.](https://docs.chain.link/docs/ethereum-addresses/)Add those to you pair config as "chainlink:<address>", like this:
 ```
@@ -114,6 +115,7 @@ With constant mode, you can set a fixed price to market make. The bot will not c
     "side": "d",
     "priceFeedPrimary": "constant:1",
     "priceFeedSecondary": null,
+    ....
 }
 ```
 
