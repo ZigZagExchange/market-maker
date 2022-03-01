@@ -233,11 +233,9 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "badbalance" };
     }
 
-    goodWallets.forEach(accountId => {
-        if(WALLETS[accountId]['ORDER_BROADCASTING'] == true) {
-            goodWallets.delete(accountId);
-        }
-    })    
+    goodWallets = goodWallets.filter(accountId => {
+        WALLETS[accountId]['ORDER_BROADCASTING'] == false;
+    });
 
     if (goodWallets.length === 0) {
         return { fillable: false, reason: "sending order already " };
