@@ -141,9 +141,14 @@ async function handleMessage(json) {
     if (!(["lastprice", "liquidity2", "fillstatus", "marketinfo"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
-            Object.keys(WALLETS).forEach(accountId => {
+            const accountId = msg.args[1];
+            if(msg.args[0] == 'fillrequest' && accountId) {
                 WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-            });
+            } else {
+                Object.keys(WALLETS).forEach(accountId => {
+                    WALLETS[accountId]['ORDER_BROADCASTING'] = false;
+                });
+            }            
             break;
         case 'orders':
             const orders = msg.args[0];
