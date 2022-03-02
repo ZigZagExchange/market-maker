@@ -553,7 +553,7 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
 
         subscriptionMsg.subscribe.subscriptions.push({
             "streamSubscription": {
-                "resource": `markets:${cryptowatchMarketId}:trades`
+                "resource": `markets:${cryptowatchMarketId}:book:spread`
             }
         })
     }
@@ -571,8 +571,9 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
         if (!msg.marketUpdate) return;
 
         const marketId = "cryptowatch:" + msg.marketUpdate.market.marketId;
-        let trades = msg.marketUpdate.tradesUpdate.trades;
-        let price = trades[trades.length - 1].priceStr / 1;
+        let ask = msg.marketUpdate.orderBookSpreadUpdate.ask.priceStr;
+        let bid = msg.marketUpdate.orderBookSpreadUpdate.bid.priceStr;
+        let price = ask / 2 + bid / 2;
         PRICE_FEEDS[marketId] = price;
     }
     function onclose () {
