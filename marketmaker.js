@@ -626,16 +626,33 @@ function indicateLiquidity () {
         const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
         const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
 
-        const splits = 10;
         const liquidity = [];
-        for (let i=1; i <= splits; i++) {
-            const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/splits));
-            const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/splits));
-            if ((['b','d']).includes(side)) {
-                liquidity.push(["b", buyPrice, maxBuySize / splits, expires]);
+        if (mmConfig.indicateLiquidity) {
+            for (let i in mmConfig.indicateLiquidity) {
+                const entry = mmConfig.indicateLiquidity[i];
+                const spread = entry[0];
+                const amount = entry[1];
+                const buyPrice = midPrice * (1 - spread);
+                const sellPrice = midPrice * (1 + spread);
+                if ((['b','d']).includes(side)) {
+                    liquidity.push(["b", buyPrice, amount, expires]);
+                }
+                if ((['s','d']).includes(side)) {
+                    liquidity.push(["s", sellPrice, amount, expires]);
+                }
             }
-            if ((['s','d']).includes(side)) {
-                liquidity.push(["s", sellPrice, maxSellSize / splits, expires]);
+        }
+        else {
+            const splits = 10;
+            for (let i=1; i <= splits; i++) {
+                const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/splits));
+                const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/splits));
+                if ((['b','d']).includes(side)) {
+                    liquidity.push(["b", buyPrice, maxBuySize / splits, expires]);
+                }
+                if ((['s','d']).includes(side)) {
+                    liquidity.push(["s", sellPrice, maxSellSize / splits, expires]);
+                }
             }
         }
         const msg = { op: "indicateliq2", args: [CHAIN_ID, marketId, liquidity, CLIENT_ID] };
