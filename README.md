@@ -115,6 +115,8 @@ Orders coming in below the `minSpread` from the price feed will not be filled. T
 
 A market can be set inactive by flipping the active switch to `false`.
 
+`indicateLiquidity` can be used to set custom spread levels on the UI. By default 10 splits are used to split up the liquidity but this allows you to indicate something else besides that. Liquidity will still be filled based on the other settings, so this is for visual purposes only. It is usually omitted or left blank and most users shouldn't use it. An example with `indicateLiquidity` can be found in the Pair Setting Examples.
+
 ## Pair Options
 
 ###### delayAfterFill
@@ -176,6 +178,25 @@ Sell the rip:
     "side": "s",
     "initPrice": 20,
     "slippageRate": 1e-5,
+    "maxSize": 1000,
+    "minSize": 0.5,
+    "minSpread": 0,
+    "active": true
+}
+```
+
+Indicate non-standard liquidity.
+
+```
+"DYDX-USDC": {
+    "mode": "constant",
+    "side": "s",
+    "initPrice": 20,
+    "slippageRate": 1e-5,
+    "indicateLiquidity": [
+        [0.0001, 10],
+        [0.0003, 10],
+    ]
     "maxSize": 1000,
     "minSize": 0.5,
     "minSpread": 0,
