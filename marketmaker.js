@@ -645,7 +645,7 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
         const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
 
-        const splits = 10;
+        const splits = mmConfig.numOrdersIndicated || 10;
         const liquidity = [];
         for (let i=1; i <= splits; i++) {
             const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/splits));
