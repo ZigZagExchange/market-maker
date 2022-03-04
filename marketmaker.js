@@ -745,11 +745,23 @@ function rememberOrder(chainId, marketId, orderId, price, sellSymbol, sellQuanti
         }
     }
 
+    const [baseSymbol, quoteSymbol] = marketId.splice('-')
+    let baseQuantity, quoteQuantity;
+    if(sellSymbol === baseSymbol) {
+        baseQuantity = sellQuantity;
+        quoteQuantity = buyQuantity;
+    } else {
+        baseQuantity = buyQuantity;
+        quoteQuantity = sellQuantity;
+    }
+
     const expiry = timestamp + 900;
     PAST_ORDER_LIST[orderId] = {
         'chainId': chainId,
         'marketId': marketId,
         'price': price,
+        'baseQuantity': baseQuantity,
+        'quoteQuantity': quoteQuantity,
         'sellSymbol': sellSymbol,
         'sellQuantity': sellQuantity,
         'buySymbol': buySymbol,
