@@ -773,7 +773,7 @@ function rememberOrder(chainId, marketId, orderId, price, sellSymbol, sellQuanti
         }
     }
 
-    const [baseSymbol, quoteSymbol] = marketId.splice('-')
+    const [baseSymbol, quoteSymbol] = marketId.split('-')
     let baseQuantity, quoteQuantity;
     if(sellSymbol === baseSymbol) {
         baseQuantity = sellQuantity;
