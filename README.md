@@ -124,7 +124,9 @@ With constant mode, you can set a fixed price to market make. The bot will not c
 These pair options can be set for each pair individual. You can even use more then on option per pair (though they might cancel each other out).
 
 ###### delayAfterFill
-The market maker will stop market making on the pair, after successfully filling an order. This can be used to wait out bigger price moves.
+The market maker will stop market making on the pair, after successfully filling an order. This can be used to wait out bigger price moves. 
+With the second parameter, you can set the minimum trade size (**in base quantity**) to activate the option. This parameter is optional and can be omitted (like: `[60]`)
+
 Example, here a delay of **60 seconds** is used:
 ```
 "ETH-USDC": {
@@ -137,12 +139,13 @@ Example, here a delay of **60 seconds** is used:
     "minSize": 0.0003,
     "minSpread": 0.0005,
     "active": true,
-    "delayAfterFill": 60        <- This would pause the pair for 60 sec after a fill.
+    "delayAfterFill": [60, 0.5]        <- This would pause the pair for 60 sec after a fill.
 }
 ```
 
 ###### increaseSpreadAfterFill
-The market maker increases the spread by the set amount. After the time (**in seconds**) the spread will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3).
+The market maker increases the spread by the set amount. After the time (**in seconds**) the spread will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3). 
+With the third parameter, you can set the minimum trade size (**in base quantity**) to activate the option. This parameter is optional and can be omitted.
 Example:
 ```
 "ETH-USDC": {
@@ -155,12 +158,13 @@ Example:
     "minSize": 0.0003,
     "minSpread": 0.0005,
     "active": true,
-    "increaseSpreadAfterFill": [0.1, 300]        <- This would increase the minSpread by 0.1 per fill for 300 sec each.
+    "increaseSpreadAfterFill": [0.1, 300, 0.5]        <- This would increase the minSpread by 0.1 per fill for 300 sec each.
 }
 ```
 
 ###### changeSizeAfterFill
-The market maker increases the size (**in base token**) by the set amount. After the time (**in seconds**) the size will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3). You can set a value below 0 to reduce size after fill (like: [-0.1, 300]).
+The market maker increases the size (**in base token**) by the set amount. After the time (**in seconds**) the size will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3). You can set a value below 0 to reduce size after fill (like: [-0.1, 300]). 
+With the third parameter, you can set the minimum trade size (**in base quantity**) to activate the option. This parameter is optional and can be omitted.
 Example:
 ```
 "ETH-USDC": {
@@ -173,7 +177,7 @@ Example:
     "minSize": 0.0003,
     "minSpread": 0.0005,
     "active": true,
-    "changeSizeAfterFill": [0.05, 300]        <- This would increase the maxSize by 0.05 ETH (base token) per fill for 300 sec each.
+    "changeSizeAfterFill": [0.05, 300, 0.5]        <- This would increase the maxSize by 0.05 ETH (base token) per fill for 300 sec each.
 }
 ```
 
