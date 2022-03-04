@@ -177,6 +177,24 @@ Example:
 }
 ```
 
+###### numOrdersIndicated
+On the UI, when indicating liquidity, by default will indicate the liquidity in 10 separate orders spaced evenly apart. To change the number of orders indicated, you can use the `numOrdersIndicated` setting.
+
+Example:
+```
+"ETH-USDC": {
+    "mode": "pricefeed",
+    "side": "b",
+    "priceFeedPrimary": "cryptowatch:6631",
+    "priceFeedSecondary": "cryptowatch:588",
+    "slippageRate": 1e-5,
+    "maxSize": 100,
+    "minSize": 0.0003,
+    "minSpread": 0.0005,
+    "active": true,
+    "numOrdersIndicated": 5
+}
+```
 
 ## Pair Setting Examples
 
