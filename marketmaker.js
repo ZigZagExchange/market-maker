@@ -702,17 +702,39 @@ async function afterFill(chainId, orderId, wallet) {
     const indicateMarket = {};
     indicateMarket[marketId] = mmConfig;
     if(mmConfig.delayAfterFill) {
-        mmConfig.active = false;
-        cancelLiquidity (chainId, marketId);
-        console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
-        setTimeout(() => {
-            mmConfig.active = true;
-            console.log(`Set ${marketId} active.`);
-            indicateLiquidity(indicateMarket);
-        }, mmConfig.delayAfterFill * 1000);
+        let delayAfterFillMinSize
+        if(
+            !Array.isArray(mmConfig.delayAfterFill) ||
+            !mmConfig.delayAfterFill[1]
+        ) {
+            delayAfterFillMinSize = 0;
+        } else {
+            delayAfterFillMinSize = mmConfig.delayAfterFill[1]
+        }
+
+        if(order.baseQuantity > delayAfterFillMinSize)  {
+            // no array -> old config
+            // or array and buyQuantity over minSize
+            mmConfig.active = false;
+            cancelLiquidity (chainId, marketId);
+            console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
+            setTimeout(() => {
+                mmConfig.active = true;
+                console.log(`Set ${marketId} active.`);
+                indicateLiquidity(indicateMarket);
+            }, mmConfig.delayAfterFill * 1000);   
+        }             
     }
 
-    if(mmConfig.increaseSpreadAfterFill) {
+    // increaseSpreadAfterFill size might not be set
+    const increaseSpreadAfterFillMinSize = (mmConfig.increaseSpreadAfterFill?.[2]) 
+        ? mmConfig.increaseSpreadAfterFill[2]
+        : 0
+    if(
+        mmConfig.increaseSpreadAfterFill &&
+        order.baseQuantity > increaseSpreadAfterFillMinSize
+        
+    ) {
         const [spread, time] = mmConfig.increaseSpreadAfterFill;
         mmConfig.minSpread = mmConfig.minSpread + spread;
         console.log(`Changed ${marketId} minSpread by ${spread}.`);
@@ -724,7 +746,14 @@ async function afterFill(chainId, orderId, wallet) {
         }, time * 1000);
     }
 
-    if(mmConfig.changeSizeAfterFill) {
+    // changeSizeAfterFill size might not be set
+    const changeSizeAfterFillMinSize = (mmConfig.changeSizeAfterFill?.[2]) 
+        ? mmConfig.changeSizeAfterFill[2]
+        : 0
+    if(
+        mmConfig.changeSizeAfterFill &&
+        order.baseQuantity > changeSizeAfterFillMinSize
+    ) {
         const [size, time] = mmConfig.changeSizeAfterFill;
         mmConfig.maxSize = mmConfig.maxSize + size;
         console.log(`Changed ${marketId} maxSize by ${size}.`);
