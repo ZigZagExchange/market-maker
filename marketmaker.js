@@ -586,7 +586,7 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
 async function chainlinkSetup(chainlinkMarketAddress) {
     chainlinkMarketAddress.forEach(async (address) => {
         try {
-            const aggregatorV3InterfaceABI = JSON.parse(fs.readFileSync('chainlinkV3InterfaceABI.abi'));
+            const aggregatorV3InterfaceABI = JSON.parse(fs.readFileSync('ABIs/chainlinkV3InterfaceABI.abi'));
             const provider = new ethers.Contract(address, aggregatorV3InterfaceABI, ethersProvider);
             const decimals = await provider.decimals();
             CHAINLINK_PROVIDERS['chainlink:'+address] = [provider, decimals];
