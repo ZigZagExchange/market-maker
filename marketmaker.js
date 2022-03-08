@@ -172,6 +172,8 @@ async function handleMessage(json) {
                 try {
                     await broadcastFill(chainId, orderId, msg.args[2], fillOrder, wallet);
                 } catch (e) {
+                    const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'r',null,e.message]]]}
+                    zigzagws.send(JSON.stringify(orderCommitMsg));
                     console.error(e);
                 }
                 wallet['ORDER_BROADCASTING'] = false;
