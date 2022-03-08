@@ -594,24 +594,25 @@ async function chainlinkSetup(chainlinkMarketAddress) {
             const aggregatorV3InterfaceABI = JSON.parse(fs.readFileSync('ABIs/chainlinkV3InterfaceABI.abi'));
             const provider = new ethers.Contract(address, aggregatorV3InterfaceABI, ethersProvider);
             const decimals = await provider.decimals();
-            CHAINLINK_PROVIDERS['chainlink:'+address] = [provider, decimals];
+            const key = 'chainlink:' + address;
+            CHAINLINK_PROVIDERS[key] = [provider, decimals];
 
             // get inital price
             const response = await provider.latestRoundData();
-            PRICE_FEEDS['chainlink:'+address] = parseFloat(response.answer) / 10**decimals;
+            PRICE_FEEDS[key] = parseFloat(response.answer) / 10**decimals;
         } catch (e) {
             throw new Error ("Error while setting up chainlink for "+address+", Error: "+e);
         }
     });
     await Promise.all(results);
-    setInterval(chainlinkUpdate, 15000);
+    setInterval(chainlinkUpdate, 30000);
 }
 
 async function chainlinkUpdate() {
     await Promise.all(Object.keys(CHAINLINK_PROVIDERS).map(async (key) => {
         const [provider, decimals] = CHAINLINK_PROVIDERS[key];
         const response = await provider.latestRoundData();
-        PRICE_FEEDS['chainlink:'+address] = parseFloat(response.answer) / 10**decimals;
+        PRICE_FEEDS[key] = parseFloat(response.answer) / 10**decimals;
     }));
 }
 
@@ -644,25 +645,26 @@ async function uniswapV3Setup(uniswapV3Address) {
               tokenProvier1.decimals()
             ]);
   
+            const key = 'uniswapV3:' + address;
             const decimalsRatio = (10**decimals0 / 10**decimals1);  
-            UNISWAP_V3_PROVIDERS['uniswapV3:'+address] = [provider, decimalsRatio];
-  
+            UNISWAP_V3_PROVIDERS[key] = [provider, decimalsRatio];
+
             // get inital price
             const price = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
-            PRICE_FEEDS['uniswapV3:'+address] = price;
+            PRICE_FEEDS[key] = price;
         } catch (e) {
             throw new Error ("Error while setting up uniswapV3 for "+address+", Error: "+e);
         }
     });
     await Promise.all(results);
-    setInterval(uniswapV3Update, 15000);
+    setInterval(uniswapV3Update, 30000);
 }
 
 async function uniswapV3Update() {
     await Promise.all(Object.keys(UNISWAP_V3_PROVIDERS).map(async (key) => {
         const [provider, decimalsRatio] = UNISWAP_V3_PROVIDERS[key];
         const slot0 = await provider.slot0();
-        PRICE_FEEDS['chainlink:'+address] = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
+        PRICE_FEEDS[key] = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
     }));    
 }
 
