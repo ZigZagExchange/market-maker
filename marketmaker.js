@@ -605,7 +605,7 @@ async function chainlinkSetup(chainlinkMarketAddress) {
         }
     });
     await Promise.all(results);
-    setInterval(chainlinkUpdate, 15000);
+    setInterval(chainlinkUpdate, 30000);
 }
 
 async function chainlinkUpdate() {
@@ -657,7 +657,7 @@ async function uniswapV3Setup(uniswapV3Address) {
         }
     });
     await Promise.all(results);
-    setInterval(uniswapV3Update, 15000);
+    setInterval(uniswapV3Update, 30000);
 }
 
 async function uniswapV3Update() {
