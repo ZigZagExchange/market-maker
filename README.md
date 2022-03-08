@@ -89,7 +89,7 @@ Example:
 ```
 
 ###### Chainlink
-With chainlink you have access to price oracles via blockchain. The requests are read calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). There you can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
+With chainlink you have access to price oracles via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
 ```
 "ETH-USDC": {
     "infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
@@ -107,6 +107,27 @@ You can get the available market contracts [here.](https://docs.chain.link/docs/
     ....
 }
 ```
+
+###### UniswapV3
+With uniswapV3 you have access to price feed's via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
+```
+"ETH-USDC": {
+    "infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
+    "zigzagChainId": 1,
+    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+    ....
+}
+```
+You can get the available market contracts [here.](https://info.uniswap.org) Select a token and then a pool matching the pair you plan to market make. Make sure base and quote tokens match (USDC-ETH don't work for ETH-USDC). After selecting a pool, you can see the adress in the browser URL. Add that to your pair config as "uniswapv3:<address>", like this:
+```
+"ETH-USDC": {
+    "side": "d",
+    "priceFeedPrimary": "uniswapv3:0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+    "priceFeedSecondary": null,
+    ....
+}
+```
+
 ###### Constant
 With constant mode, you can set a fixed price to market make. The bot will not change that price. Any secondary price feed will be ignored, if used as priceFeedPrimary. Also good as a `priceFeedSecondary` on stablecoins.
 
