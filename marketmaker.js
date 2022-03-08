@@ -15,6 +15,7 @@ const WALLETS = {};
 const FILL_QUEUE = [];
 const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
+const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 
 // Load MM config
@@ -486,7 +487,7 @@ async function processFillQueue() {
 }
 
 async function setupPriceFeeds() {
-  const cryptowatch = [], chainlink = [];
+  const cryptowatch = [], chainlink = [], uniswapV3 = [];
     for (let market in MM_CONFIG.pairs) {
         const pairConfig = MM_CONFIG.pairs[market];
         if(!pairConfig.active) { continue; }
@@ -510,6 +511,9 @@ async function setupPriceFeeds() {
                 case 'chainlink':
                     if(!chainlink.includes(id)) { chainlink.push(id); }
                     break;
+                case 'uniswapv3':
+                    if(!uniswapV3.includes(id)) { uniswapV3.push(id); }
+                    break;
                 case 'constant':
                     PRICE_FEEDS['constant:'+id] = parseFloat(id);
                     break;
@@ -519,8 +523,9 @@ async function setupPriceFeeds() {
           }
       });
   }
-  if(chainlink.length) await chainlinkSetup(chainlink);
-  if(cryptowatch.length) await cryptowatchWsSetup(cryptowatch);
+  if(chainlink.length > 0) await chainlinkSetup(chainlink);
+  if(cryptowatch.length > 0) await cryptowatchWsSetup(cryptowatch);
+  if(uniswapV3.length > 0) await uniswapV3Setup(uniswapV3);
 
   console.log(PRICE_FEEDS);
 }
@@ -584,7 +589,7 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
 }
 
 async function chainlinkSetup(chainlinkMarketAddress) {
-    chainlinkMarketAddress.forEach(async (address) => {
+    const results = chainlinkMarketAddress.map(async (address) => {
         try {
             const aggregatorV3InterfaceABI = JSON.parse(fs.readFileSync('ABIs/chainlinkV3InterfaceABI.abi'));
             const provider = new ethers.Contract(address, aggregatorV3InterfaceABI, ethersProvider);
@@ -598,15 +603,67 @@ async function chainlinkSetup(chainlinkMarketAddress) {
             throw new Error ("Error while setting up chainlink for "+address+", Error: "+e);
         }
     });
-    setInterval(chainlinkUpdate, 10000);
+    await Promise.all(results);
+    setInterval(chainlinkUpdate, 15000);
 }
 
 async function chainlinkUpdate() {
     await Promise.all(Object.keys(CHAINLINK_PROVIDERS).map(async (key) => {
         const [provider, decimals] = CHAINLINK_PROVIDERS[key];
         const response = await provider.latestRoundData();
-        const price = parseFloat(response.answer) / 10**decimals;
+        PRICE_FEEDS['chainlink:'+address] = parseFloat(response.answer) / 10**decimals;
     }));
+}
+
+async function uniswapV3Setup(uniswapV3Address) {
+    const results = uniswapV3Address.map(async (address) => {
+        try {
+            const IUniswapV3PoolABI = JSON.parse(fs.readFileSync('ABIs/IUniswapV3Pool.abi'));
+            const ERC20ABI = JSON.parse(fs.readFileSync('ABIs/ERC20.abi'));
+  
+            const provider = new ethers.Contract(address, IUniswapV3PoolABI, ethersProvider);
+            
+            let [
+              slot0,
+              addressToken0,
+              addressToken1
+            ] = await Promise.all ([
+              provider.slot0(),
+              provider.token0(),
+              provider.token1()
+            ]);
+  
+            const tokenProvier0 = new ethers.Contract(addressToken0, ERC20ABI, ethersProvider);
+            const tokenProvier1 = new ethers.Contract(addressToken1, ERC20ABI, ethersProvider);
+  
+            let [
+              decimals0,
+              decimals1
+            ] = await Promise.all ([
+              tokenProvier0.decimals(),
+              tokenProvier1.decimals()
+            ]);
+  
+            const decimalsRatio = (10**decimals0 / 10**decimals1);  
+            UNISWAP_V3_PROVIDERS['uniswapV3:'+address] = [provider, decimalsRatio];
+  
+            // get inital price
+            const price = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
+            PRICE_FEEDS['uniswapV3:'+address] = price;
+        } catch (e) {
+            throw new Error ("Error while setting up uniswapV3 for "+address+", Error: "+e);
+        }
+    });
+    await Promise.all(results);
+    setInterval(uniswapV3Update, 15000);
+}
+
+async function uniswapV3Update() {
+    await Promise.all(Object.keys(UNISWAP_V3_PROVIDERS).map(async (key) => {
+        const [provider, decimalsRatio] = UNISWAP_V3_PROVIDERS[key];
+        const slot0 = await provider.slot0();
+        PRICE_FEEDS['chainlink:'+address] = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
+    }));    
 }
 
 function indicateLiquidity (pairs = MM_CONFIG.pairs) {
