@@ -157,7 +157,7 @@ async function handleMessage(json) {
                 const fillable = isOrderFillable(order);
                 console.log(fillable);
                 if (fillable.fillable) {
-                    sendFillRequest(order, fillable.wallet);
+                    sendFillRequest(order, fillable.walletId);
                 }
                 else if (fillable.reason === "badprice") {
                     OPEN_ORDERS[orderId] = order;
@@ -221,23 +221,23 @@ function isOrderFillable(order) {
     const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
     const sellQuantity = (side === 's') ? quoteQuantity : baseQuantity;
     const neededBalanceBN = sellQuantity * 10**sellDecimals;
-    const goodWallets = [];
+    const goodWalletIds = [];
     Object.keys(WALLETS).forEach(accountId => {
         const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
         if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
-            goodWallets.push(accountId);
+            goodWalletIds.push(accountId);
         }
     });
 
-    if (goodWallets.length === 0) {
+    if (goodWalletIds.length === 0) {
         return { fillable: false, reason: "badbalance" };
     }
 
-    goodWallets = goodWallets.filter(accountId => {
+    goodWalletIds = goodWalletIds.filter(accountId => {
         WALLETS[accountId]['ORDER_BROADCASTING'] == false;
     });
 
-    if (goodWallets.length === 0) {
+    if (goodWalletIds.length === 0) {
         return { fillable: false, reason: "sending order already " };
     }
 
@@ -272,7 +272,7 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "badprice" };
     }
 
-    return { fillable: true, reason: null, wallet: goodWallets[0]};
+    return { fillable: true, reason: null, walletId: goodWalletIds[0]};
 }
 
 function genQuote(chainId, marketId, side, baseQuantity) {
@@ -457,7 +457,7 @@ async function fillOpenOrders() {
         const order = OPEN_ORDERS[orderId];
         const fillable = isOrderFillable(order);
         if (fillable.fillable) {
-            sendFillRequest(order, fillable.wallets);
+            sendFillRequest(order, fillable.walletId);
             delete OPEN_ORDERS[orderId];
         }
         else if (fillable.reason !== "badprice") {
