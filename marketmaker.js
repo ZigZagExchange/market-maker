@@ -100,9 +100,6 @@ setInterval(updateAccountState, 900000);
 logBalance();
 setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
 
-// Initiate fill loop
-setTimeout(processFillQueue, 1000);
-
 let fillOrdersInterval, indicateLiquidityInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
