@@ -101,9 +101,6 @@ setInterval(updateAccountState, 900000);
 logBalance();
 setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
 
-// Initiate fill loop
-setTimeout(processFillQueue, 1000);
-
 let fillOrdersInterval, indicateLiquidityInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
@@ -224,7 +221,7 @@ function isOrderFillable(order) {
     const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
     const sellQuantity = (side === 's') ? quoteQuantity : baseQuantity;
     const neededBalanceBN = sellQuantity * 10**sellDecimals;
-    const goodWalletIds = [];
+    let goodWalletIds = [];
     Object.keys(WALLETS).forEach(accountId => {
         const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
         if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
@@ -237,7 +234,7 @@ function isOrderFillable(order) {
     }
 
     goodWalletIds = goodWalletIds.filter(accountId => {
-        WALLETS[accountId]['ORDER_BROADCASTING'] == false;
+        return !WALLETS[accountId]['ORDER_BROADCASTING'];
     });
 
     if (goodWalletIds.length === 0) {
