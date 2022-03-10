@@ -231,7 +231,7 @@ function isOrderFillable(order) {
     }
 
     goodWalletIds = goodWalletIds.filter(accountId => {
-        WALLETS[accountId]['ORDER_BROADCASTING'] == false;
+        return !WALLETS[accountId]['ORDER_BROADCASTING'];
     });
 
     if (goodWalletIds.length === 0) {
