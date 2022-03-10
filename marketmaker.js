@@ -218,7 +218,7 @@ function isOrderFillable(order) {
     const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
     const sellQuantity = (side === 's') ? quoteQuantity : baseQuantity;
     const neededBalanceBN = sellQuantity * 10**sellDecimals;
-    const goodWalletIds = [];
+    let goodWalletIds = [];
     Object.keys(WALLETS).forEach(accountId => {
         const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
         if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
