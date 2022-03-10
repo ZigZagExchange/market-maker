@@ -444,6 +444,9 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
         newStatus = 'r';
         error = swap.error.toString();
    }
+   if(error.includes('balance')) {
+        updateAccountState()
+   }
 
     const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
     zigzagws.send(JSON.stringify(orderCommitMsg));
