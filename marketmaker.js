@@ -12,7 +12,6 @@ const PRICE_FEEDS = {};
 const OPEN_ORDERS = {};
 const NONCES = {};
 const WALLETS = {};
-const FILL_QUEUE = [];
 const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
@@ -102,9 +101,6 @@ setInterval(updateAccountState, 900000);
 logBalance();
 setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
 
-// Initiate fill loop
-setTimeout(processFillQueue, 1000);
-
 let fillOrdersInterval, indicateLiquidityInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
@@ -113,7 +109,7 @@ zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
-    fillOrdersInterval = setInterval(fillOpenOrders, 5000);
+    fillOrdersInterval = setInterval(fillOpenOrders, 1000);
     indicateLiquidityInterval = setInterval(indicateLiquidity, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
@@ -125,9 +121,6 @@ function onWsOpen() {
 
 function onWsClose () {
     console.log("Websocket closed. Restarting");
-    Object.keys(WALLETS).forEach(accountId => {
-        WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-    });
     setTimeout(() => {
         clearInterval(fillOrdersInterval)
         clearInterval(indicateLiquidityInterval)
@@ -143,9 +136,10 @@ async function handleMessage(json) {
     if (!(["lastprice", "liquidity2", "fillstatus", "marketinfo"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
-            Object.keys(WALLETS).forEach(accountId => {
+            const accountId = msg.args[1];
+            if(msg.args[0] == 'fillrequest' && accountId) {
                 WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-            });
+            }         
             break;
         case 'orders':
             const orders = msg.args[0];
@@ -154,7 +148,7 @@ async function handleMessage(json) {
                 const fillable = isOrderFillable(order);
                 console.log(fillable);
                 if (fillable.fillable) {
-                    FILL_QUEUE.push({ order: order, wallets: fillable.wallets});
+                    sendFillRequest(order, fillable.walletId);
                 }
                 else if (fillable.reason === "badprice") {
                     OPEN_ORDERS[orderId] = order;
@@ -220,13 +214,26 @@ function isOrderFillable(order) {
     const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
     const sellQuantity = (side === 's') ? quoteQuantity : baseQuantity;
     const neededBalanceBN = sellQuantity * 10**sellDecimals;
-    const goodWallets = [];
+    let goodWalletIds = [];
     Object.keys(WALLETS).forEach(accountId => {
         const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
         if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
-            goodWallets.push(accountId);
+            goodWalletIds.push(accountId);
         }
     });
+
+    if (goodWalletIds.length === 0) {
+        return { fillable: false, reason: "badbalance" };
+    }
+
+    goodWalletIds = goodWalletIds.filter(accountId => {
+        return !WALLETS[accountId]['ORDER_BROADCASTING'];
+    });
+
+    if (goodWalletIds.length === 0) {
+        return { fillable: false, reason: "sending order already " };
+    }
+
     const now = Date.now() / 1000 | 0;
 
     if (now > expires) {
@@ -244,10 +251,6 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "badsize" };
     }
 
-    if (goodWallets.length === 0) {
-        return { fillable: false, reason: "badbalance" };
-    }
-
     let quote;
     try {
         quote = genQuote(chainId, marketId, side, baseQuantity);
@@ -262,7 +265,7 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "badprice" };
     }
 
-    return { fillable: true, reason: null, wallets: goodWallets};
+    return { fillable: true, reason: null, walletId: goodWalletIds[0]};
 }
 
 function genQuote(chainId, marketId, side, baseQuantity) {
@@ -276,7 +279,7 @@ function genQuote(chainId, marketId, side, baseQuantity) {
 
     const mmConfig = MM_CONFIG.pairs[marketId];
     const mmSide = mmConfig.side || 'd';
-    if (mmConfig.side !== 'd' && mmConfig.side === side) {
+    if (mmSide !== 'd' && mmSide === side) {
         throw new Error("badside");
     }
     const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
@@ -379,6 +382,11 @@ async function sendFillRequest(orderreceipt, accountId) {
     // Set wallet flag
     WALLETS[accountId]['ORDER_BROADCASTING'] = true;
 
+    // ORDER_BROADCASTING should not take longer as 5 sec
+    setTimeout(function() {
+        WALLETS[accountId]['ORDER_BROADCASTING'] = false;
+    }, 5000);
+
     const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
     zigzagws.send(JSON.stringify(resp));
     rememberOrder(chainId,
@@ -447,43 +455,13 @@ async function fillOpenOrders() {
         const order = OPEN_ORDERS[orderId];
         const fillable = isOrderFillable(order);
         if (fillable.fillable) {
-            FILL_QUEUE.push({ order: order, wallets: fillable.wallets});
+            sendFillRequest(order, fillable.walletId);
             delete OPEN_ORDERS[orderId];
         }
         else if (fillable.reason !== "badprice") {
             delete OPEN_ORDERS[orderId];
         }
     }
-}
-
-async function processFillQueue() {
-    if (FILL_QUEUE.length === 0) {
-        setTimeout(processFillQueue, 100);
-        return;
-    }
-    await Promise.all(Object.keys(WALLETS).map(async accountId => {
-        const wallet = WALLETS[accountId];
-        if (wallet['ORDER_BROADCASTING']) {
-            return;
-        }
-        let index = 0;
-        for(;index<FILL_QUEUE.length; index++) {
-            if(FILL_QUEUE[index].wallets.includes(accountId)) {
-                break;
-            }
-        }
-        if (index < FILL_QUEUE.length) {
-            const selectedOrder = FILL_QUEUE.splice(index, 1);
-            try {
-                await sendFillRequest(selectedOrder[0].order, accountId);
-                return;
-            } catch (e) {
-                console.error(e);
-                wallet['ORDER_BROADCASTING'] = false;
-            }
-        }
-    }));
-    setTimeout(processFillQueue, 100);
 }
 
 async function setupPriceFeeds() {
