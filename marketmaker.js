@@ -136,7 +136,7 @@ async function handleMessage(json) {
     if (!(["lastprice", "liquidity2", "fillstatus", "marketinfo"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
-            const accountId = msg.args[1];
+            const accountId = msg.args?.[1];
             if(msg.args[0] == 'fillrequest' && accountId) {
                 WALLETS[accountId]['ORDER_BROADCASTING'] = false;
             }         
