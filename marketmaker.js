@@ -389,6 +389,11 @@ async function sendFillRequest(orderreceipt, accountId) {
     // Set wallet flag
     WALLETS[accountId]['ORDER_BROADCASTING'] = true;
 
+    // ORDER_BROADCASTING should not take longer as 5 sec
+    setTimeout(function() {
+        WALLETS[accountId]['ORDER_BROADCASTING'] = false;
+    }, 5000);
+
     const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
     zigzagws.send(JSON.stringify(resp));
     rememberOrder(chainId,
