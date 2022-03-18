@@ -121,9 +121,6 @@ function onWsOpen() {
 
 function onWsClose () {
     console.log("Websocket closed. Restarting");
-    Object.keys(WALLETS).forEach(accountId => {
-        WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-    });
     setTimeout(() => {
         clearInterval(fillOrdersInterval)
         clearInterval(indicateLiquidityInterval)
@@ -142,11 +139,7 @@ async function handleMessage(json) {
             const accountId = msg.args[1];
             if(msg.args[0] == 'fillrequest' && accountId) {
                 WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-            } else {
-                Object.keys(WALLETS).forEach(accountId => {
-                    WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-                });
-            }            
+            }         
             break;
         case 'orders':
             const orders = msg.args[0];
