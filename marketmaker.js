@@ -18,6 +18,7 @@ const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 
 let uniswap_error_counter = 0;
+let chainlink_error_counter = 0;
 
 // Load MM config
 let MM_CONFIG;
@@ -589,11 +590,20 @@ async function chainlinkSetup(chainlinkMarketAddress) {
 }
 
 async function chainlinkUpdate() {
-    await Promise.all(Object.keys(CHAINLINK_PROVIDERS).map(async (key) => {
-        const [provider, decimals] = CHAINLINK_PROVIDERS[key];
-        const response = await provider.latestRoundData();
-        PRICE_FEEDS[key] = parseFloat(response.answer) / 10**decimals;
-    }));
+    try {
+        await Promise.all(Object.keys(CHAINLINK_PROVIDERS).map(async (key) => {
+            const [provider, decimals] = CHAINLINK_PROVIDERS[key];
+            const response = await provider.latestRoundData();
+            PRICE_FEEDS[key] = parseFloat(response.answer) / 10**decimals;
+            chainlink_error_counter = 0;
+        }));
+    } catch (err) {
+        chainlink_error_counter += 1;
+        console.log(`Failed to update chainlink, retry: ${err.message}`);
+        if(chainlink_error_counter > 4) {
+            throw new Error ("Failed to update chainlink since 150 seconds!")
+        }
+    }
 }
 
 async function uniswapV3Setup(uniswapV3Address) {
@@ -651,9 +661,10 @@ async function uniswapV3Update() {
         uniswap_error_counter = 0;
     } catch (err) {
         uniswap_error_counter += 1;
+        console.log(`Failed to update uniswap, retry: ${err.message}`);
         console.log(err.message);
         if(uniswap_error_counter > 4) {
-            throw new Error ("Can't update uniswap price!")
+            throw new Error ("Failed to update uniswap since 150 seconds!")
         }
     }
 }
