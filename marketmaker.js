@@ -17,6 +17,8 @@ const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 
+let uniswap_error_counter = 0;
+
 // Load MM config
 let MM_CONFIG;
 if (process.env.MM_CONFIG) {
@@ -639,11 +641,21 @@ async function uniswapV3Setup(uniswapV3Address) {
 }
 
 async function uniswapV3Update() {
-    await Promise.all(Object.keys(UNISWAP_V3_PROVIDERS).map(async (key) => {
-        const [provider, decimalsRatio] = UNISWAP_V3_PROVIDERS[key];
-        const slot0 = await provider.slot0();
-        PRICE_FEEDS[key] = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
-    }));    
+    try {
+        await Promise.all(Object.keys(UNISWAP_V3_PROVIDERS).map(async (key) => {
+            const [provider, decimalsRatio] = UNISWAP_V3_PROVIDERS[key];
+            const slot0 = await provider.slot0();
+            PRICE_FEEDS[key] = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
+        }));
+        // reset error counter if successful 
+        uniswap_error_counter = 0;
+    } catch (err) {
+        uniswap_error_counter += 1;
+        console.log(err.message);
+        if(uniswap_error_counter > 4) {
+            throw new Error ("Can't update uniswap price!")
+        }
+    }
 }
 
 function indicateLiquidity (pairs = MM_CONFIG.pairs) {
