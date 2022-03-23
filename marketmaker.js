@@ -17,6 +17,9 @@ const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 
+let uniswap_error_counter = 0;
+let chainlink_error_counter = 0;
+
 // Load MM config
 let MM_CONFIG;
 if (process.env.MM_CONFIG) {
@@ -136,7 +139,7 @@ async function handleMessage(json) {
     if (!(["lastprice", "liquidity2", "fillstatus", "marketinfo"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
-            const accountId = msg.args[1];
+            const accountId = msg.args?.[1];
             if(msg.args[0] == 'fillrequest' && accountId) {
                 WALLETS[accountId]['ORDER_BROADCASTING'] = false;
             }         
@@ -587,11 +590,20 @@ async function chainlinkSetup(chainlinkMarketAddress) {
 }
 
 async function chainlinkUpdate() {
-    await Promise.all(Object.keys(CHAINLINK_PROVIDERS).map(async (key) => {
-        const [provider, decimals] = CHAINLINK_PROVIDERS[key];
-        const response = await provider.latestRoundData();
-        PRICE_FEEDS[key] = parseFloat(response.answer) / 10**decimals;
-    }));
+    try {
+        await Promise.all(Object.keys(CHAINLINK_PROVIDERS).map(async (key) => {
+            const [provider, decimals] = CHAINLINK_PROVIDERS[key];
+            const response = await provider.latestRoundData();
+            PRICE_FEEDS[key] = parseFloat(response.answer) / 10**decimals;
+        }));
+        chainlink_error_counter = 0;
+    } catch (err) {
+        chainlink_error_counter += 1;
+        console.log(`Failed to update chainlink, retry: ${err.message}`);
+        if(chainlink_error_counter > 4) {
+            throw new Error ("Failed to update chainlink since 150 seconds!")
+        }
+    }
 }
 
 async function uniswapV3Setup(uniswapV3Address) {
@@ -639,11 +651,22 @@ async function uniswapV3Setup(uniswapV3Address) {
 }
 
 async function uniswapV3Update() {
-    await Promise.all(Object.keys(UNISWAP_V3_PROVIDERS).map(async (key) => {
-        const [provider, decimalsRatio] = UNISWAP_V3_PROVIDERS[key];
-        const slot0 = await provider.slot0();
-        PRICE_FEEDS[key] = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
-    }));    
+    try {
+        await Promise.all(Object.keys(UNISWAP_V3_PROVIDERS).map(async (key) => {
+            const [provider, decimalsRatio] = UNISWAP_V3_PROVIDERS[key];
+            const slot0 = await provider.slot0();
+            PRICE_FEEDS[key] = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
+        }));
+        // reset error counter if successful 
+        uniswap_error_counter = 0;
+    } catch (err) {
+        uniswap_error_counter += 1;
+        console.log(`Failed to update uniswap, retry: ${err.message}`);
+        console.log(err.message);
+        if(uniswap_error_counter > 4) {
+            throw new Error ("Failed to update uniswap since 150 seconds!")
+        }
+    }
 }
 
 function indicateLiquidity (pairs = MM_CONFIG.pairs) {
