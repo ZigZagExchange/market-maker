@@ -595,8 +595,8 @@ async function chainlinkUpdate() {
             const [provider, decimals] = CHAINLINK_PROVIDERS[key];
             const response = await provider.latestRoundData();
             PRICE_FEEDS[key] = parseFloat(response.answer) / 10**decimals;
-            chainlink_error_counter = 0;
         }));
+        chainlink_error_counter = 0;
     } catch (err) {
         chainlink_error_counter += 1;
         console.log(`Failed to update chainlink, retry: ${err.message}`);
