@@ -343,7 +343,6 @@ async function sendFillRequest(orderreceipt, accountId) {
     const baseQuantity = orderreceipt[5];
     const quoteQuantity = orderreceipt[6];
     const quote = genQuote(chainId, marketId, side, baseQuantity);
-    console.log(baseQuantity, quoteQuantity, quote);
     let tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
     if (side === "b") {
         tokenSell = market.baseAssetId;
