@@ -109,7 +109,7 @@ zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
-    fillOrdersInterval = setInterval(fillOpenOrders, 1000);
+    fillOrdersInterval = setInterval(fillOpenOrders, 200);
     indicateLiquidityInterval = setInterval(indicateLiquidity, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
@@ -150,7 +150,10 @@ async function handleMessage(json) {
                 if (fillable.fillable) {
                     sendFillRequest(order, fillable.walletId);
                 }
-                else if (fillable.reason === "badprice") {
+                else if ([
+                  "sending order already",
+                  "badprice"
+                ].includes(fillable.reason)) {
                     OPEN_ORDERS[orderId] = order;
                 }
             });
@@ -231,7 +234,7 @@ function isOrderFillable(order) {
     });
 
     if (goodWalletIds.length === 0) {
-        return { fillable: false, reason: "sending order already " };
+        return { fillable: false, reason: "sending order already" };
     }
 
     const now = Date.now() / 1000 | 0;
@@ -457,8 +460,10 @@ async function fillOpenOrders() {
         if (fillable.fillable) {
             sendFillRequest(order, fillable.walletId);
             delete OPEN_ORDERS[orderId];
-        }
-        else if (fillable.reason !== "badprice") {
+        }else if (![
+            "sending order already",
+            "badprice"
+          ].includes(fillable.reason)) {
             delete OPEN_ORDERS[orderId];
         }
     }
