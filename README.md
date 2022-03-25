@@ -32,6 +32,14 @@ node marketmaker.js
 
 ## Settings
 
+#### Mainnet zkSync
+- "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com"
+- "zigzagChainId": 1
+
+#### Rinkeby zkSync
+- "zigzagWsUrl": "wss://secret-thicket-93345.herokuapp.com"
+- "zigzagChainId": 1000
+
 You can add, remove, and configure pair settings in the `pairs` section. A pair setting looks like this:
 
 ```
