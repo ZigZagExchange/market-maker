@@ -356,9 +356,9 @@ async function sendFillRequest(orderreceipt, accountId) {
     const side = orderreceipt[3];
     const baseQuantity = orderreceipt[5];
     const quoteQuantity = orderreceipt[6];
-    let tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
+    let quote, tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
     if (side === "b") {
-      const quote = genQuote(chainId, marketId, side, baseQuantity);
+      quote = genQuote(chainId, marketId, side, baseQuantity);
       tokenSell = market.baseAssetId;
       tokenBuy = market.quoteAssetId;
       sellSymbol = market.baseAsset.symbol;
@@ -367,7 +367,7 @@ async function sendFillRequest(orderreceipt, accountId) {
       sellQuantity = baseQuantity.toFixed(market.baseAsset.decimals); // set by user
       buyQuantity = quote.quoteQuantity.toFixed(market.quoteAsset.decimals);
     } else if (side === "s") {
-      const quote = genQuote(chainId, marketId, side, 0, quoteQuantity);
+      quote = genQuote(chainId, marketId, side, 0, quoteQuantity);
       tokenSell = market.quoteAssetId;
       tokenBuy = market.baseAssetId;
       sellSymbol = market.quoteAsset.symbol;
