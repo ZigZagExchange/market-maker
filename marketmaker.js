@@ -362,7 +362,7 @@ async function sendFillRequest(orderreceipt, accountId) {
       buySymbol = market.quoteAsset.symbol;
       // Add 1 bip to to protect against rounding errors
       sellQuantity = baseQuantity.toFixed(market.baseAsset.decimals); // set by user
-      buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
+      buyQuantity = quote.quoteQuantity.toFixed(market.quoteAsset.decimals);
     } else if (side === "s") {
       const quote = genQuote(chainId, marketId, side, 0, quoteQuantity);
       tokenSell = market.quoteAssetId;
@@ -371,7 +371,7 @@ async function sendFillRequest(orderreceipt, accountId) {
       buySymbol = market.baseAsset.symbol;
       // Add 1 bip to to protect against rounding errors        
       sellQuantity = quoteQuantity.toFixed(market.quoteAsset.decimals); // set by user
-      buyQuantity = (quote.baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
+      buyQuantity = quote.baseQuantity.toFixed(market.baseAsset.decimals);
     }
     const sellQuantityParsed = syncProvider.tokenSet.parseToken(
         tokenSell,
