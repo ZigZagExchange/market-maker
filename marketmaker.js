@@ -274,7 +274,7 @@ function isOrderFillable(order) {
     return { fillable: true, reason: null, walletId: goodWalletIds[0]};
 }
 
-function genQuote(chainId, marketId, side, baseQuantity) {
+function genQuote(chainId, marketId, side, baseQuantity, quoteQuantity = 0) {
     const market = MARKETS[marketId];
     if (CHAIN_ID !== chainId) throw new Error("badchain");
     if (!market) throw new Error("badmarket");
@@ -291,17 +291,25 @@ function genQuote(chainId, marketId, side, baseQuantity) {
     const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
     if (!primaryPrice) throw new Error("badprice");
     const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
-    let quoteQuantity;
-    if (side === 'b') {
-        quoteQuantity = (baseQuantity * primaryPrice * (1 + SPREAD)) + market.quoteFee;
-    }
-    else if (side === 's') {
-        quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
+    if (baseQuantity && !quoteQuantity) {
+      if (side === 'b') {
+          quoteQuantity = (baseQuantity * primaryPrice * (1 + SPREAD)) + market.quoteFee;
+      } else if (side === 's') {
+          quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
+      }
+    } else if (!baseQuantity && quoteQuantity){
+      if (side === 'b') {
+        baseQuantity = (quoteQuantity / (primaryPrice * (1 + SPREAD))) + market.baseFee;
+      } else if (side === 's') {
+        baseQuantity = (quoteQuantity - market.quoteFee) / (primaryPrice * (1 - SPREAD));
+      }
+    } else {
+      throw new Error("badbase/badquote");
     }
     const quotePrice = (quoteQuantity / baseQuantity).toPrecision(6);
     if (quotePrice < 0) throw new Error("Amount is inadequate to pay fee");
     if (isNaN(quotePrice)) throw new Error("Internal Error. No price generated.");
-    return { quotePrice, quoteQuantity };
+    return { quotePrice, baseQuantity, quoteQuantity };
 }
 
 function validatePriceFeed(marketId) {
@@ -331,8 +339,8 @@ function validatePriceFeed(marketId) {
     // If the secondary price feed varies from the primary price feed by more than 1%, assume something is broken
     const percentDiff = Math.abs(primaryPrice - secondaryPrice) / primaryPrice;
     if (percentDiff > 0.03) {
-        throw new Error("Circuit breaker triggered");
-        console.error("Primary and secondary price feeds do not match!");
+      console.error("Primary and secondary price feeds do not match!");
+      throw new Error("Circuit breaker triggered");
     }
 
     return true;
@@ -348,24 +356,25 @@ async function sendFillRequest(orderreceipt, accountId) {
     const side = orderreceipt[3];
     const baseQuantity = orderreceipt[5];
     const quoteQuantity = orderreceipt[6];
-    const quote = genQuote(chainId, marketId, side, baseQuantity);
     let tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
     if (side === "b") {
-        tokenSell = market.baseAssetId;
-        tokenBuy = market.quoteAssetId;
-        sellSymbol = market.baseAsset.symbol;
-        buySymbol = market.quoteAsset.symbol;
-        // Add 1 bip to to protect against rounding errors
-        sellQuantity = (quoteQuantity / quote.quotePrice * 1.0001).toFixed(market.baseAsset.decimals);
-        buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
+      const quote = genQuote(chainId, marketId, side, baseQuantity);
+      tokenSell = market.baseAssetId;
+      tokenBuy = market.quoteAssetId;
+      sellSymbol = market.baseAsset.symbol;
+      buySymbol = market.quoteAsset.symbol;
+      // Add 1 bip to to protect against rounding errors
+      sellQuantity = baseQuantity.toFixed(market.baseAsset.decimals); // set by user
+      buyQuantity = quote.quoteQuantity.toFixed(market.quoteAsset.decimals);
     } else if (side === "s") {
-        tokenSell = market.quoteAssetId;
-        tokenBuy = market.baseAssetId;
-        sellSymbol = market.quoteAsset.symbol;
-        buySymbol = market.baseAsset.symbol;
-        // Add 1 bip to to protect against rounding errors
-        sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
-        buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
+      const quote = genQuote(chainId, marketId, side, 0, quoteQuantity);
+      tokenSell = market.quoteAssetId;
+      tokenBuy = market.baseAssetId;
+      sellSymbol = market.quoteAsset.symbol;
+      buySymbol = market.baseAsset.symbol;
+      // Add 1 bip to to protect against rounding errors        
+      sellQuantity = quoteQuantity.toFixed(market.quoteAsset.decimals); // set by user
+      buyQuantity = quote.baseQuantity.toFixed(market.baseAsset.decimals);
     }
     const sellQuantityParsed = syncProvider.tokenSet.parseToken(
         tokenSell,
