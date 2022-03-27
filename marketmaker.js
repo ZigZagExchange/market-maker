@@ -282,7 +282,9 @@ function genQuote(chainId, marketId, side, baseQuantity, quoteQuantity = 0) {
     if (CHAIN_ID !== chainId) throw new Error("badchain");
     if (!market) throw new Error("badmarket");
     if (!(['b','s']).includes(side)) throw new Error("badside");
-    if (baseQuantity <= 0) throw new Error("badquantity");
+    if (baseQuantity < 0) throw new Error("badbasequantity");
+    if (quoteQuantity < 0) throw new Error("badquotequantity");
+    if (baseQuantity === 0 & quoteQuantity === 0) throw new Error("badquantity");
 
     validatePriceFeed(marketId);
 
@@ -298,13 +300,13 @@ function genQuote(chainId, marketId, side, baseQuantity, quoteQuantity = 0) {
       if (side === 'b') {
           quoteQuantity = (baseQuantity * primaryPrice * (1 + SPREAD)) + market.quoteFee;
       } else if (side === 's') {
-          quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
+          quoteQuantity = (baseQuantity * primaryPrice * (1 - SPREAD)) - market.quoteFee;
       }
-    } else if (!baseQuantity && quoteQuantity){
+    } else if (!baseQuantity && quoteQuantity) {
       if (side === 'b') {
-        baseQuantity = (quoteQuantity / (primaryPrice * (1 + SPREAD))) + market.baseFee;
+        baseQuantity = (quoteQuantity / (primaryPrice * (1 - SPREAD))) + market.baseFee;
       } else if (side === 's') {
-        baseQuantity = (quoteQuantity - market.quoteFee) / (primaryPrice * (1 - SPREAD));
+        baseQuantity = (quoteQuantity / (primaryPrice * (1 + SPREAD))) - market.baseFee;
       }
     } else {
       throw new Error("badbase/badquote");
