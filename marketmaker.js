@@ -304,9 +304,9 @@ function genQuote(chainId, marketId, side, baseQuantity, quoteQuantity = 0) {
       }
     } else if (!baseQuantity && quoteQuantity) {
       if (side === 'b') {
-        baseQuantity = (quoteQuantity / (primaryPrice * (1 - SPREAD))) + market.baseFee;
-      } else if (side === 's') {
         baseQuantity = (quoteQuantity / (primaryPrice * (1 + SPREAD))) - market.baseFee;
+      } else if (side === 's') {
+        baseQuantity = (quoteQuantity / (primaryPrice * (1 - SPREAD))) + market.baseFee;
       }
     } else {
       throw new Error("badbase/badquote");
