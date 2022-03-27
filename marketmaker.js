@@ -274,44 +274,34 @@ function isOrderFillable(order) {
     return { fillable: true, reason: null, walletId: goodWalletIds[0]};
 }
 
-function genQuote(chainId, marketId, side, baseQuantity, quoteQuantity = 0) {
-    const market = MARKETS[marketId];
-    if (CHAIN_ID !== chainId) throw new Error("badchain");
-    if (!market) throw new Error("badmarket");
-    if (!(['b','s']).includes(side)) throw new Error("badside");
-    if (baseQuantity < 0) throw new Error("badbasequantity");
-    if (quoteQuantity < 0) throw new Error("badquotequantity");
-    if (baseQuantity === 0 & quoteQuantity === 0) throw new Error("badquantity");
+function genQuote(chainId, marketId, side, baseQuantity) {
+  const market = MARKETS[marketId];
+  if (CHAIN_ID !== chainId) throw new Error("badchain");
+  if (!market) throw new Error("badmarket");
+  if (!(['b','s']).includes(side)) throw new Error("badside");
+  if (baseQuantity <= 0) throw new Error("badquantity");
 
-    validatePriceFeed(marketId);
+  validatePriceFeed(marketId);
 
-    const mmConfig = MM_CONFIG.pairs[marketId];
-    const mmSide = mmConfig.side || 'd';
-    if (mmSide !== 'd' && mmSide === side) {
-        throw new Error("badside");
-    }
-    const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
-    if (!primaryPrice) throw new Error("badprice");
-    const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
-    if (baseQuantity && !quoteQuantity) {
-      if (side === 'b') {
-          quoteQuantity = (baseQuantity * primaryPrice * (1 + SPREAD)) + market.quoteFee;
-      } else if (side === 's') {
-          quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
-      }
-    } else if (!baseQuantity && quoteQuantity){
-      if (side === 'b') {
-        baseQuantity = (quoteQuantity / (primaryPrice * (1 + SPREAD))) + market.baseFee;
-      } else if (side === 's') {
-        baseQuantity = (quoteQuantity - market.quoteFee) / (primaryPrice * (1 - SPREAD));
-      }
-    } else {
-      throw new Error("badbase/quotequantity");
-    }
-    const quotePrice = (quoteQuantity / baseQuantity).toPrecision(6);
-    if (quotePrice < 0) throw new Error("Amount is inadequate to pay fee");
-    if (isNaN(quotePrice)) throw new Error("Internal Error. No price generated.");
-    return { quotePrice, baseQuantity, quoteQuantity };
+  const mmConfig = MM_CONFIG.pairs[marketId];
+  const mmSide = mmConfig.side || 'd';
+  if (mmSide !== 'd' && mmSide === side) {
+      throw new Error("badside");
+  }
+  const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+  if (!primaryPrice) throw new Error("badprice");
+  const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
+  let quoteQuantity;
+  if (side === 'b') {
+      quoteQuantity = (baseQuantity * primaryPrice * (1 + SPREAD)) + market.quoteFee;
+  }
+  else if (side === 's') {
+      quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
+  }
+  const quotePrice = (quoteQuantity / baseQuantity).toPrecision(6);
+  if (quotePrice < 0) throw new Error("Amount is inadequate to pay fee");
+  if (isNaN(quotePrice)) throw new Error("Internal Error. No price generated.");
+  return { quotePrice, quoteQuantity };
 }
 
 function validatePriceFeed(marketId) {
@@ -349,72 +339,71 @@ function validatePriceFeed(marketId) {
 }
 
 async function sendFillRequest(orderreceipt, accountId) {
-    const chainId = orderreceipt[0];
-    const orderId = orderreceipt[1];
-    const marketId = orderreceipt[2];
-    const market = MARKETS[marketId];
-    const baseCurrency = market.baseAssetId;
-    const quoteCurrency = market.quoteAssetId;
-    const side = orderreceipt[3];
-    const baseQuantity = orderreceipt[5];
-    const quoteQuantity = orderreceipt[6];
-    let quote, tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
-    if (side === "b") {
-      quote = genQuote(chainId, marketId, side, baseQuantity);
+  const chainId = orderreceipt[0];
+  const orderId = orderreceipt[1];
+  const marketId = orderreceipt[2];
+  const market = MARKETS[marketId];
+  const baseCurrency = market.baseAssetId;
+  const quoteCurrency = market.quoteAssetId;
+  const side = orderreceipt[3];
+  const baseQuantity = orderreceipt[5];
+  const quoteQuantity = orderreceipt[6];
+  const quote = genQuote(chainId, marketId, side, baseQuantity);
+  let tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
+  if (side === "b") {
       tokenSell = market.baseAssetId;
       tokenBuy = market.quoteAssetId;
       sellSymbol = market.baseAsset.symbol;
       buySymbol = market.quoteAsset.symbol;
       // Add 1 bip to to protect against rounding errors
-      sellQuantity = baseQuantity.toFixed(market.baseAsset.decimals); // set by user
-      buyQuantity = quote.quoteQuantity.toFixed(market.quoteAsset.decimals);
-    } else if (side === "s") {
-      quote = genQuote(chainId, marketId, side, 0, quoteQuantity);
+      sellQuantity = (baseQuantity * 1.0001).toFixed(market.baseAsset.decimals);
+      buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
+  } else if (side === "s") {
       tokenSell = market.quoteAssetId;
       tokenBuy = market.baseAssetId;
       sellSymbol = market.quoteAsset.symbol;
       buySymbol = market.baseAsset.symbol;
-      // Add 1 bip to to protect against rounding errors        
-      sellQuantity = quoteQuantity.toFixed(market.quoteAsset.decimals); // set by user
-      buyQuantity = quote.baseQuantity.toFixed(market.baseAsset.decimals);
-    }
-    const sellQuantityParsed = syncProvider.tokenSet.parseToken(
-        tokenSell,
-        sellQuantity
-    );
-    const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(sellQuantityParsed);
-    const tokenRatio = {};
-    tokenRatio[tokenBuy] = buyQuantity;
-    tokenRatio[tokenSell] = sellQuantity;
-    const oneMinExpiry = (Date.now() / 1000 | 0) + 60;
-    const orderDetails = {
-        tokenSell,
-        tokenBuy,
-        amount: sellQuantityPacked,
-        ratio: zksync.utils.tokenRatio(tokenRatio),
-        validUntil: oneMinExpiry
-    }
-    const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
+      // Add 1 bip to to protect against rounding errors
+      sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
+      buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
+  }
+  const sellQuantityParsed = syncProvider.tokenSet.parseToken(
+      tokenSell,
+      sellQuantity
+  );
+  const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(sellQuantityParsed);
+  const tokenRatio = {};
+  tokenRatio[tokenBuy] = buyQuantity;
+  tokenRatio[tokenSell] = sellQuantity;
+  const oneMinExpiry = (Date.now() / 1000 | 0) + 60;
+  const orderDetails = {
+      tokenSell,
+      tokenBuy,
+      amount: sellQuantityPacked,
+      ratio: zksync.utils.tokenRatio(tokenRatio),
+      validUntil: oneMinExpiry
+  }
+  const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
 
-    // Set wallet flag
-    WALLETS[accountId]['ORDER_BROADCASTING'] = true;
+  // Set wallet flag
+  WALLETS[accountId]['ORDER_BROADCASTING'] = true;
 
-    // ORDER_BROADCASTING should not take longer as 5 sec
-    setTimeout(function() {
-        WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-    }, 5000);
+  // ORDER_BROADCASTING should not take longer as 5 sec
+  setTimeout(function() {
+      WALLETS[accountId]['ORDER_BROADCASTING'] = false;
+  }, 5000);
 
-    const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
-    zigzagws.send(JSON.stringify(resp));
-    rememberOrder(chainId,
-        marketId,
-        orderId, 
-        quote.quotePrice, 
-        sellSymbol,
-        sellQuantity,
-        buySymbol,
-        buyQuantity
-    );
+  const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
+  zigzagws.send(JSON.stringify(resp));
+  rememberOrder(chainId,
+      marketId,
+      orderId, 
+      quote.quotePrice, 
+      sellSymbol,
+      sellQuantity,
+      buySymbol,
+      buyQuantity
+  );
 }
 
 async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
