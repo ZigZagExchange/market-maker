@@ -279,7 +279,9 @@ function genQuote(chainId, marketId, side, baseQuantity, quoteQuantity = 0) {
     if (CHAIN_ID !== chainId) throw new Error("badchain");
     if (!market) throw new Error("badmarket");
     if (!(['b','s']).includes(side)) throw new Error("badside");
-    if (baseQuantity <= 0) throw new Error("badquantity");
+    if (baseQuantity < 0) throw new Error("badbasequantity");
+    if (quoteQuantity < 0) throw new Error("badquotequantity");
+    if (baseQuantity === 0 & quoteQuantity === 0) throw new Error("badquantity");
 
     validatePriceFeed(marketId);
 
@@ -304,7 +306,7 @@ function genQuote(chainId, marketId, side, baseQuantity, quoteQuantity = 0) {
         baseQuantity = (quoteQuantity - market.quoteFee) / (primaryPrice * (1 - SPREAD));
       }
     } else {
-      throw new Error("badbase/badquote");
+      throw new Error("badbase/quotequantity");
     }
     const quotePrice = (quoteQuantity / baseQuantity).toPrecision(6);
     if (quotePrice < 0) throw new Error("Amount is inadequate to pay fee");
