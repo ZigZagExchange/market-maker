@@ -259,16 +259,19 @@ function isOrderFillable(order) {
 
     let quote;
     try {
+      if (side === 's') {
         quote = genQuote(chainId, marketId, side, baseQuantity);
+        if (price > quote.quotePrice) {
+          return { fillable: false, reason: "badprice" };
+        }
+      } else {
+        quote = genQuote(chainId, marketId, side, 0, quoteQuantity);
+        if (price < quote.quotePrice) {
+          return { fillable: false, reason: "badprice" };
+        }
+      }        
     } catch (e) {
         return { fillable: false, reason: e.message }
-    }
-
-    if (side == 's' && price > quote.quotePrice) {
-        return { fillable: false, reason: "badprice" };
-    }
-    else if (side == 'b' && price < quote.quotePrice) {
-        return { fillable: false, reason: "badprice" };
     }
 
     return { fillable: true, reason: null, walletId: goodWalletIds[0]};
