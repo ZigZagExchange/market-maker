@@ -152,8 +152,7 @@ async function handleMessage(json) {
                 console.log(fillable);
                 if (fillable.fillable) {
                     sendFillRequest(order, fillable.walletId);
-                }
-                else if ([
+                } else if ([
                   "sending order already",
                   "badprice"
                 ].includes(fillable.reason)) {
@@ -304,9 +303,9 @@ function genQuote(chainId, marketId, side, baseQuantity, quoteQuantity = 0) {
       }
     } else if (!baseQuantity && quoteQuantity) {
       if (side === 'b') {
-        baseQuantity = (quoteQuantity / (primaryPrice * (1 + SPREAD))) - market.baseFee;
+        baseQuantity = (quoteQuantity / (primaryPrice * (1 + SPREAD))) + market.baseFee;
       } else if (side === 's') {
-        baseQuantity = (quoteQuantity / (primaryPrice * (1 - SPREAD))) + market.baseFee;
+        baseQuantity = (quoteQuantity / (primaryPrice * (1 - SPREAD))) - market.baseFee;
       }
     } else {
       throw new Error("badbase/badquote");
@@ -361,30 +360,34 @@ async function sendFillRequest(orderreceipt, accountId) {
     const side = orderreceipt[3];
     const baseQuantity = orderreceipt[5];
     const quoteQuantity = orderreceipt[6];
-    let quote, tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
+    let quote, tokenSell, tokenBuy, sellQuantity, sellQuantityParsed, buyQuantity, buySymbol, sellSymbol;
     if (side === "b") {
-      quote = genQuote(chainId, marketId, side, baseQuantity);
+      quote = genQuote(chainId, marketId, side, 0, quoteQuantity);
       tokenSell = market.baseAssetId;
       tokenBuy = market.quoteAssetId;
       sellSymbol = market.baseAsset.symbol;
-      buySymbol = market.quoteAsset.symbol;
-      // Add 1 bip to to protect against rounding errors
-      sellQuantity = baseQuantity.toFixed(market.baseAsset.decimals); // set by user
-      buyQuantity = quote.quoteQuantity.toFixed(market.quoteAsset.decimals);
+      buySymbol = market.quoteAsset.symbol;      
+      buyQuantity = quoteQuantity.toFixed(market.quoteAsset.decimals); // set by user
+      sellQuantity = quote.baseQuantity.toFixed(market.baseAsset.decimals);
+      // Add 0.1 bip to the amount to protect against rounding errors
+      sellQuantityParsed = syncProvider.tokenSet.parseToken(
+        tokenSell,
+        (quote.baseQuantity*0.99999).toFixed(market.baseAsset.decimals)
+      );
     } else if (side === "s") {
-      quote = genQuote(chainId, marketId, side, 0, quoteQuantity);
+      quote = genQuote(chainId, marketId, side, baseQuantity);
       tokenSell = market.quoteAssetId;
       tokenBuy = market.baseAssetId;
       sellSymbol = market.quoteAsset.symbol;
       buySymbol = market.baseAsset.symbol;
-      // Add 1 bip to to protect against rounding errors        
-      sellQuantity = quoteQuantity.toFixed(market.quoteAsset.decimals); // set by user
-      buyQuantity = quote.baseQuantity.toFixed(market.baseAsset.decimals);
-    }
-    const sellQuantityParsed = syncProvider.tokenSet.parseToken(
+      buyQuantity = baseQuantity.toFixed(market.baseAsset.decimals); // set by user
+      sellQuantity = quote.quoteQuantity.toFixed(market.quoteAsset.decimals);
+      // Add 0.1 bip to the amount to protect against rounding errors
+      sellQuantityParsed = syncProvider.tokenSet.parseToken(
         tokenSell,
-        sellQuantity
-    );
+        (quote.quoteQuantity*0.99999).toFixed(market.quoteAsset.decimals)
+      );
+    }    
     const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(sellQuantityParsed);
     const tokenRatio = {};
     tokenRatio[tokenBuy] = buyQuantity;
