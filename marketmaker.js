@@ -392,10 +392,10 @@ async function sendFillRequest(orderreceipt, accountId) {
     const sellQuantityParsed = syncProvider.tokenSet.parseToken(
       tokenSell,
       sellQuantity
-    );
+    ) * 0.99999;
     // Add 0.1 bip to the amount to protect against rounding errors
     const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(
-      sellQuantityParsed * 0.99999 
+      sellQuantityParsed
     );
     const tokenRatio = {};
     tokenRatio[tokenBuy] = buyQuantityParsed;
