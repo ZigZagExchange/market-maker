@@ -16,6 +16,7 @@ const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
+const FEE_TOKENS = [];
 
 let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
@@ -195,6 +196,18 @@ async function handleMessage(json) {
             const newBaseFee = MARKETS[marketId].baseFee;
             const newQuoteFee = MARKETS[marketId].quoteFee;
             console.log(`marketinfo ${marketId} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
+            if(
+              marketInfo.baseAsset.enabledForFees &&
+              !FEE_TOKENS.includes(marketInfo.baseAsset.id)
+            ) {
+              FEE_TOKENS.push(marketInfo.baseAsset.id);
+            } 
+            if(
+              marketInfo.quoteAsset.enabledForFees &&
+              !FEE_TOKENS.includes(marketInfo.quoteAsset.id)
+            ) {
+              FEE_TOKENS.push(marketInfo.quoteAsset.id);
+            } 
             break
         default:
             break
@@ -415,11 +428,15 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
         zigzagws.send(JSON.stringify(orderCommitMsg));
         return;
     }
+    // select token to match user's fee token
+    const feeToken = (FEE_TOKENS.includes(swapOffer.tokenSell))
+      ? swapOffer.tokenSell
+      : 0
     const randInt = (Math.random()*1000).toFixed(0);
     console.time('syncswap' + randInt);
     const swap = await wallet['syncWallet'].syncSwap({
         orders: [swapOffer, fillOrder],
-        feeToken: "ETH",
+        feeToken: feeToken,
         nonce: fillOrder.nonce
     });
     const txHash = swap.txHash.split(":")[1];
