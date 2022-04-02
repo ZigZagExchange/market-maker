@@ -16,7 +16,8 @@ const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
-const FEE_TOKENS = [];
+const FEE_TOKEN = null;
+const FEE_TOKEN_LIST = [];
 
 let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
@@ -29,6 +30,9 @@ if (process.env.MM_CONFIG) {
 else {
     const mmConfigFile = fs.readFileSync("config.json", "utf8");
     MM_CONFIG = JSON.parse(mmConfigFile);
+}
+if (MM_CONFIG.feeToken) {
+  FEE_TOKEN = MM_CONFIG.feeToken;
 }
 let activePairs = [];
 for (let marketId in MM_CONFIG.pairs) {
@@ -196,17 +200,18 @@ async function handleMessage(json) {
             const newBaseFee = MARKETS[marketId].baseFee;
             const newQuoteFee = MARKETS[marketId].quoteFee;
             console.log(`marketinfo ${marketId} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
+            if (FEE_TOKEN) break
             if(
               marketInfo.baseAsset.enabledForFees &&
-              !FEE_TOKENS.includes(marketInfo.baseAsset.id)
+              !FEE_TOKEN_LIST.includes(marketInfo.baseAsset.id)
             ) {
-              FEE_TOKENS.push(marketInfo.baseAsset.id);
+              FEE_TOKEN_LIST.push(marketInfo.baseAsset.id);
             } 
             if(
               marketInfo.quoteAsset.enabledForFees &&
-              !FEE_TOKENS.includes(marketInfo.quoteAsset.id)
+              !FEE_TOKEN_LIST.includes(marketInfo.quoteAsset.id)
             ) {
-              FEE_TOKENS.push(marketInfo.quoteAsset.id);
+              FEE_TOKEN_LIST.push(marketInfo.quoteAsset.id);
             } 
             break
         default:
@@ -429,9 +434,15 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
         return;
     }
     // select token to match user's fee token
-    const feeToken = (FEE_TOKENS.includes(swapOffer.tokenSell))
+    let feeToken;
+    if (FEE_TOKEN) {
+      feeToken = FEE_TOKEN
+    } else {
+      feeToken = (FEE_TOKEN_LIST.includes(swapOffer.tokenSell))
       ? swapOffer.tokenSell
-      : 0
+      : 'ETH'
+    }
+    
     const randInt = (Math.random()*1000).toFixed(0);
     console.time('syncswap' + randInt);
     const swap = await wallet['syncWallet'].syncSwap({
