@@ -32,6 +32,23 @@ node marketmaker.js
 
 ## Settings
 
+#### Fee Token
+
+With the defualt setting the bot will pay the zkSync fee wiht the same token as the user (buy currency for the bot). You can chose to override that by a fixed fee token. Check if your tokens is avalible to pay fees on zkSync [here](https://zkscan.io/explorer/tokens).
+
+```
+{
+    "cryptowatchApiKey": "aaaaxxx",
+    "ethPrivKeys": [
+        "",
+        ""
+    ],    
+    "zigzagChainId": 1,
+    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+    "feeToken": "ETH", <- add this line if you eg. want to pay the fees in Ethereum 
+    "pairs": {
+```
+
 #### Mainnet zkSync
 - "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com"
 - "zigzagChainId": 1
