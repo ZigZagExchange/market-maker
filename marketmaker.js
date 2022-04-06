@@ -269,7 +269,6 @@ function isOrderFillable(order) {
     else if (side == 'b' && price < quote.quotePrice) {
         return { fillable: false, reason: "badprice" };
     }
-
     return { fillable: true, reason: null, walletId: goodWalletIds[0]};
 }
 
