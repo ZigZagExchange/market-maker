@@ -513,6 +513,14 @@ async function setupPriceFeeds() {
         }
         const primaryPriceFeed = pairConfig.priceFeedPrimary;
         const secondaryPriceFeed = pairConfig.priceFeedSecondary;
+
+        // parse keys to lower case to match later PRICE_FEED keys
+        if (primaryPriceFeed) {
+          MM_CONFIG.pairs[market].priceFeedPrimary = primaryPriceFeed.toLowerCase();
+        }
+        if (secondaryPriceFeed) {
+          MM_CONFIG.pairs[market].priceFeedSecondary = secondaryPriceFeed.toLowerCase();
+        }
         [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
             if(!priceFeed) { return; }
             const [provider, id] = priceFeed.split(':');
@@ -666,7 +674,7 @@ async function uniswapV3Setup(uniswapV3Address) {
               tokenProvier1.decimals()
             ]);
   
-            const key = 'uniswapV3:' + address;
+            const key = 'uniswapv3:' + address;
             const decimalsRatio = (10**decimals0 / 10**decimals1);  
             UNISWAP_V3_PROVIDERS[key] = [provider, decimalsRatio];
 
