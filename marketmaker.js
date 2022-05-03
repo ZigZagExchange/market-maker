@@ -762,11 +762,13 @@ async function afterFill(chainId, orderId, wallet) {
     const sellTokenParsed = syncProvider.tokenSet.parseToken (
         order.sellSymbol,
         order.sellQuantity
-    );    
-    const oldbuyTokenParsed = ethers.BigNumber.from(account_state[order.buySymbol]);
-    const oldsellTokenParsed = ethers.BigNumber.from(account_state[order.sellSymbol]);
-    account_state[order.buySymbol] = (oldbuyTokenParsed.add(buyTokenParsed)).toString();
-    account_state[order.sellSymbol] = (oldsellTokenParsed.sub(sellTokenParsed)).toString();
+    );
+    const oldBuyBalance = account_state[order.buySymbol] ? account_state[order.buySymbol] : '0';
+    const oldSellBalance = account_state[order.sellSymbol] ? account_state[order.sellSymbol] : '0';
+    const oldBuyTokenParsed = ethers.BigNumber.from(oldBuyBalance);
+    const oldSellTokenParsed = ethers.BigNumber.from(oldSellBalance);
+    account_state[order.buySymbol] = (oldBuyTokenParsed.add(buyTokenParsed)).toString();
+    account_state[order.sellSymbol] = (oldSellTokenParsed.sub(sellTokenParsed)).toString();
     
     const indicateMarket = {};
     indicateMarket[marketId] = mmConfig;
