@@ -639,7 +639,7 @@ async function uniswapV3Setup(uniswapV3Address) {
               tokenProvier1.decimals()
             ]);
   
-            const key = 'uniswapV3:' + address;
+            const key = 'uniswapv3:' + address;
             const decimalsRatio = (10**decimals0 / 10**decimals1);  
             UNISWAP_V3_PROVIDERS[key] = [provider, decimalsRatio];
 
