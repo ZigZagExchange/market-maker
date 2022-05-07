@@ -157,8 +157,7 @@ async function handleMessage(json) {
                 console.log(fillable);
                 if (fillable.fillable) {
                     sendFillRequest(order, fillable.walletId);
-                }
-                else if ([
+                } else if ([
                   "sending order already",
                   "badprice"
                 ].includes(fillable.reason)) {
@@ -369,6 +368,7 @@ async function sendFillRequest(orderreceipt, accountId) {
   if (side === "b") {
       tokenSell = market.baseAssetId;
       tokenBuy = market.quoteAssetId;
+
       sellSymbol = market.baseAsset.symbol;
       buySymbol = market.quoteAsset.symbol;
       // Add 1 bip to to protect against rounding errors
@@ -377,6 +377,7 @@ async function sendFillRequest(orderreceipt, accountId) {
   } else if (side === "s") {
       tokenSell = market.quoteAssetId;
       tokenBuy = market.baseAssetId;
+
       sellSymbol = market.quoteAsset.symbol;
       buySymbol = market.baseAsset.symbol;
       // Add 1 bip to to protect against rounding errors
