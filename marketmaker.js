@@ -16,8 +16,8 @@ const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
-const FEE_TOKEN = null;
 const FEE_TOKEN_LIST = [];
+let FEE_TOKEN = null;
 
 let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
