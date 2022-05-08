@@ -746,16 +746,25 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
         const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
 
-        const splits = mmConfig.numOrdersIndicated || 10;
+        // default splits
+        let buySplits = mmConfig.numOrdersIndicated || 10;
+        let sellSplits = mmConfig.numOrdersIndicated || 10; 
+
+        // check if balance passes the min liquidity size - 10 USD
+        const usdBaseBalance = baseBalance * marketInfo.baseAsset.usdPrice;
+        const usdQuoteBalance = quoteBalance * marketInfo.quoteAsset.usdPrice;
+        if (usdBaseBalance < (10 * buySplits)) buySplits = Math.floor(usdBaseBalance / 10)
+        if (usdQuoteBalance < (10 * sellSplits)) sellSplits = Math.floor(usdQuoteBalance / 10)
+        
         const liquidity = [];
         for (let i=1; i <= splits; i++) {
-            const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/splits));
-            const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/splits));
+            const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/buySplits));
+            const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/sellSplits));
             if ((['b','d']).includes(side)) {
-                liquidity.push(["b", buyPrice, maxBuySize / splits, expires]);
+                liquidity.push(["b", buyPrice, maxBuySize / buySplits, expires]);
             }
             if ((['s','d']).includes(side)) {
-                liquidity.push(["s", sellPrice, maxSellSize / splits, expires]);
+                liquidity.push(["s", sellPrice, maxSellSize / sellSplits, expires]);
             }
         }
         const msg = { op: "indicateliq2", args: [CHAIN_ID, marketId, liquidity] };
