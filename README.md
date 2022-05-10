@@ -32,6 +32,23 @@ node marketmaker.js
 
 ## Settings
 
+#### Fee Token
+
+With the defualt setting the bot will pay the zkSync fee wiht the same token as the user (buy currency for the bot). You can chose to override that by a fixed fee token. Check if your tokens is avalible to pay fees on zkSync [here](https://zkscan.io/explorer/tokens).
+
+```
+{
+    "cryptowatchApiKey": "aaaaxxx",
+    "ethPrivKeys": [
+        "",
+        ""
+    ],    
+    "zigzagChainId": 1,
+    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+    "feeToken": "ETH", <- add this line if you eg. want to pay the fees in Ethereum 
+    "pairs": {
+```
+
 #### Mainnet zkSync
 - "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com"
 - "zigzagChainId": 1
@@ -99,12 +116,14 @@ Example:
 ###### Chainlink
 With chainlink you have access to price oracles via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
 ```
-"ETH-USDC": {
-    "infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
-    "zigzagChainId": 1,
-    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
-    ....
-}
+
+"infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
+"pairs": {
+  "ETH-USDC": {
+      "zigzagChainId": 1,
+      "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+      ....
+  }
 ```
 You can get the available market contracts [here.](https://docs.chain.link/docs/ethereum-addresses/)Add those to you pair config as "chainlink:<address>", like this:
 ```
@@ -119,12 +138,13 @@ You can get the available market contracts [here.](https://docs.chain.link/docs/
 ###### UniswapV3
 With uniswapV3 you have access to price feed's via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
 ```
-"ETH-USDC": {
-    "infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
-    "zigzagChainId": 1,
-    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
-    ....
-}
+"infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
+"pairs": {
+  "ETH-USDC": {
+      "zigzagChainId": 1,
+      "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+      ....
+  }
 ```
 You can get the available market contracts [here.](https://info.uniswap.org) Select a token and then a pool matching the pair you plan to market make. Make sure base and quote tokens match (USDC-ETH don't work for ETH-USDC). After selecting a pool, you can see the adress in the browser URL. Add that to your pair config as "uniswapv3:<address>", like this:
 ```
