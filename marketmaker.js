@@ -757,16 +757,19 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         if (usdQuoteBalance < (10 * sellSplits)) sellSplits = Math.floor(usdQuoteBalance / 10)
         
         const liquidity = [];
-        for (let i=1; i <= splits; i++) {
+        for (let i=1; i <= buySplits; i++) {
             const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/buySplits));
-            const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/sellSplits));
             if ((['b','d']).includes(side)) {
                 liquidity.push(["b", buyPrice, maxBuySize / buySplits, expires]);
             }
-            if ((['s','d']).includes(side)) {
-                liquidity.push(["s", sellPrice, maxSellSize / sellSplits, expires]);
-            }
         }
+        for (let i=1; i <= sellSplits; i++) {
+          const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/sellSplits));
+          if ((['s','d']).includes(side)) {
+              liquidity.push(["s", sellPrice, maxSellSize / sellSplits, expires]);
+          }
+      }
+
         const msg = { op: "indicateliq2", args: [CHAIN_ID, marketId, liquidity] };
         try {
             zigzagws.send(JSON.stringify(msg));
