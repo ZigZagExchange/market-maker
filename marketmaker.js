@@ -233,30 +233,7 @@ function isOrderFillable(order) {
     const expires = order[7];
     const side = order[3];
     const price = order[4];
-    const sellCurrency = (side === 's') ? market.quoteAsset.symbol : market.baseAsset.symbol;
-    const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
-    const sellQuantity = (side === 's') ? quoteQuantity : baseQuantity;
-    const neededBalanceBN = sellQuantity * 10**sellDecimals;
-    let goodWalletIds = [];
-    Object.keys(WALLETS).forEach(accountId => {
-        const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
-        if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
-            goodWalletIds.push(accountId);
-        }
-    });
-
-    if (goodWalletIds.length === 0) {
-        return { fillable: false, reason: "badbalance" };
-    }
-
-    goodWalletIds = goodWalletIds.filter(accountId => {
-        return !WALLETS[accountId]['ORDER_BROADCASTING'];
-    });
-
-    if (goodWalletIds.length === 0) {
-        return { fillable: false, reason: "sending order already" };
-    }
-
+    
     const now = Date.now() / 1000 | 0;
 
     if (now > expires) {
@@ -286,6 +263,31 @@ function isOrderFillable(order) {
     else if (side == 'b' && price < quote.quotePrice) {
         return { fillable: false, reason: "badprice" };
     }
+
+    const sellCurrency = (side === 's') ? market.quoteAsset.symbol : market.baseAsset.symbol;
+    const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
+    const sellQuantity = (side === 's') ? quote.quoteQuantity : baseQuantity;
+    const neededBalanceBN = sellQuantity * 10**sellDecimals;
+    let goodWalletIds = [];
+    Object.keys(WALLETS).forEach(accountId => {
+        const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
+        if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
+            goodWalletIds.push(accountId);
+        }
+    });
+
+    if (goodWalletIds.length === 0) {
+        return { fillable: false, reason: "badbalance" };
+    }
+
+    goodWalletIds = goodWalletIds.filter(accountId => {
+        return !WALLETS[accountId]['ORDER_BROADCASTING'];
+    });
+
+    if (goodWalletIds.length === 0) {
+        return { fillable: false, reason: "sending order already" };
+    }
+
     return { fillable: true, reason: null, walletId: goodWalletIds[0]};
 }
 
