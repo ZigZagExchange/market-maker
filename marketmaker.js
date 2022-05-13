@@ -315,7 +315,7 @@ function genQuote(chainId, marketId, side, baseQuantity) {
   else if (side === 's') {
       quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
   }
-  const quotePrice = (quoteQuantity / baseQuantity).toPrecision(6);
+  const quotePrice = Number((quoteQuantity / baseQuantity).toPrecision(6));
   if (quotePrice < 0) throw new Error("Amount is inadequate to pay fee");
   if (isNaN(quotePrice)) throw new Error("Internal Error. No price generated.");
   return { quotePrice, quoteQuantity };
