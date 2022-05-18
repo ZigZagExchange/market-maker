@@ -34,7 +34,7 @@ node marketmaker.js
 
 #### Fee Token
 
-With the defualt setting the bot will pay the zkSync fee wiht the same token as the user (buy currency for the bot). You can chose to override that by a fixed fee token. Check if your tokens is avalible to pay fees on zkSync [here](https://zkscan.io/explorer/tokens).
+With the defualt setting the bot will pay the zkSync fee wiht the same token as the user (buy currency for the bot). You can chose to override that by a fixed fee token. Check if your tokens is available to pay fees on zkSync [here](https://zkscan.io/explorer/tokens).
 
 ```
 {
