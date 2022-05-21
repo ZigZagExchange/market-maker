@@ -755,8 +755,8 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         // check if balance passes the min liquidity size - 10 USD
         const usdBaseBalance = baseBalance * marketInfo.baseAsset.usdPrice;
         const usdQuoteBalance = quoteBalance * marketInfo.quoteAsset.usdPrice;
-        if (usdBaseBalance < (10 * buySplits)) buySplits = Math.floor(usdBaseBalance / 10)
-        if (usdQuoteBalance < (10 * sellSplits)) sellSplits = Math.floor(usdQuoteBalance / 10)
+        if (usdQuoteBalance < (10 * buySplits)) buySplits = Math.floor(usdQuoteBalance / 10)
+        if (usdBaseBalance < (10 * sellSplits)) sellSplits = Math.floor(usdBaseBalance / 10)
         
         const liquidity = [];
         for (let i=1; i <= buySplits; i++) {
