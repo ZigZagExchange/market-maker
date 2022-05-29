@@ -118,7 +118,7 @@ zigzagws.on('error', console.error);
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
     fillOrdersInterval = setInterval(fillOpenOrders, 200);
-    indicateLiquidityInterval = setInterval(indicateLiquidity, 5000);
+    indicateLiquidityInterval = setInterval(indicateLiquidity, 12500);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
