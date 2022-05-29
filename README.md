@@ -34,7 +34,7 @@ node marketmaker.js
 
 #### Fee Token
 
-With the defualt setting the bot will pay the zkSync fee wiht the same token as the user (buy currency for the bot). You can chose to override that by a fixed fee token. Check if your tokens is avalible to pay fees on zkSync [here](https://zkscan.io/explorer/tokens).
+With the defualt setting the bot will pay the zkSync fee wiht the same token as the user (buy currency for the bot). You can chose to override that by a fixed fee token. Check if your tokens is available to pay fees on zkSync [here](https://zkscan.io/explorer/tokens).
 
 ```
 {
@@ -85,11 +85,12 @@ Orders coming in below the `minSpread` from the price feed will not be filled. T
 
 #### Price Feed
 
-There are 3 modes available with a 4th on the way.
+There are 4 modes available with a 5th on the way.
 
 * `cryptowatch`: Follows an external price oracle.
 * `chainlink` : Follows an external price oracle. Chainlink is WEB3 and might be slower then cryptowatch.
 * `constant`: Sets an fixed price and market makes around that price. Can be combined with single-sided liquidity to simulate limit orders.
+* `uniswapV3`: Reads prices on-chain from a specified uniswapV3 pool
 * `independent`: Under development. The price is set independent of a price feed.
 
 **Warning:** Make sure your price feed is close to the price you see on zigzag. **Otherwise, your mm can lose money!**
