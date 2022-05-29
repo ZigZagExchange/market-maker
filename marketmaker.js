@@ -105,10 +105,6 @@ try {
 // Update account state loop
 setInterval(updateAccountState, 900000);
 
-// Log mm balance over all accounts
-logBalance();
-setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
-
 let fillOrdersInterval, indicateLiquidityInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
@@ -748,13 +744,12 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
         const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
 
-        // default splits
-        let buySplits = mmConfig.numOrdersIndicated || 10;
-        let sellSplits = mmConfig.numOrdersIndicated || 10; 
-
-        // check if balance passes the min liquidity size - 10 USD
+        // dont do splits if under 1000 USD
         const usdBaseBalance = baseBalance * marketInfo.baseAsset.usdPrice;
         const usdQuoteBalance = quoteBalance * marketInfo.quoteAsset.usdPrice;
+        let buySplits = (usdQuoteBalance < 1000) ? 1 : (mmConfig.numOrdersIndicated || 4);
+        let sellSplits = (usdBaseBalance < 1000) ? 1 : (mmConfig.numOrdersIndicated || 4);
+        
         if (usdQuoteBalance < (10 * buySplits)) buySplits = Math.floor(usdQuoteBalance / 10)
         if (usdBaseBalance < (10 * sellSplits)) sellSplits = Math.floor(usdBaseBalance / 10)
         
@@ -928,34 +923,3 @@ async function updateAccountState() {
     }
 }
 
-async function logBalance() {
-    try {
-        await updateAccountState();
-        // fetch all balances over all wallets per token
-        const balance = {};
-        Object.keys(WALLETS).forEach(accountId => {
-            const committedBalaces = WALLETS[accountId]['account_state'].committed.balances;
-            Object.keys(committedBalaces).forEach(token => {
-                if(balance[token]) {
-                    balance[token] = balance[token] + parseInt(committedBalaces[token]);
-                } else {
-                    balance[token] = parseInt(committedBalaces[token]);
-                }
-            });
-        });
-        // get token price and total in USD
-        let sum = 0;
-        await Promise.all(Object.keys(balance).map(async token => {
-            const price = await syncProvider.getTokenPrice(token.toString());
-            const tokenNumber = await syncProvider.tokenSet.formatToken(token, balance[token].toString())
-            sum = sum + price * tokenNumber;
-        }));
-
-        // log to CVS
-        const date = new Date().toISOString();
-        const content = date + ";" + sum.toFixed(2) + "\n";
-        fs.writeFile('price_csv.txt', content, { flag: 'a+' }, err => {});
-    } catch(err) {
-        // pass
-    }
-}
