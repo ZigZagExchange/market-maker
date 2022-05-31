@@ -16,6 +16,8 @@ const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
+const FEE_TOKEN_LIST = [];
+let FEE_TOKEN = null;
 
 let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
@@ -28,6 +30,9 @@ if (process.env.MM_CONFIG) {
 else {
     const mmConfigFile = fs.readFileSync("config.json", "utf8");
     MM_CONFIG = JSON.parse(mmConfigFile);
+}
+if (MM_CONFIG.feeToken) {
+  FEE_TOKEN = MM_CONFIG.feeToken;
 }
 let activePairs = [];
 for (let marketId in MM_CONFIG.pairs) {
@@ -100,10 +105,6 @@ try {
 // Update account state loop
 setInterval(updateAccountState, 900000);
 
-// Log mm balance over all accounts
-logBalance();
-setInterval(logBalance, 3 * 60 * 60 * 1000); // 3h
-
 let fillOrdersInterval, indicateLiquidityInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
@@ -112,8 +113,8 @@ zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
-    fillOrdersInterval = setInterval(fillOpenOrders, 1000);
-    indicateLiquidityInterval = setInterval(indicateLiquidity, 5000);
+    fillOrdersInterval = setInterval(fillOpenOrders, 200);
+    indicateLiquidityInterval = setInterval(indicateLiquidity, 12500);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
@@ -152,8 +153,10 @@ async function handleMessage(json) {
                 console.log(fillable);
                 if (fillable.fillable) {
                     sendFillRequest(order, fillable.walletId);
-                }
-                else if (fillable.reason === "badprice") {
+                } else if ([
+                  "sending order already",
+                  "badprice"
+                ].includes(fillable.reason)) {
                     OPEN_ORDERS[orderId] = order;
                 }
             });
@@ -192,6 +195,19 @@ async function handleMessage(json) {
             const newBaseFee = MARKETS[marketId].baseFee;
             const newQuoteFee = MARKETS[marketId].quoteFee;
             console.log(`marketinfo ${marketId} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
+            if (FEE_TOKEN) break
+            if(
+              marketInfo.baseAsset.enabledForFees &&
+              !FEE_TOKEN_LIST.includes(marketInfo.baseAsset.id)
+            ) {
+              FEE_TOKEN_LIST.push(marketInfo.baseAsset.id);
+            } 
+            if(
+              marketInfo.quoteAsset.enabledForFees &&
+              !FEE_TOKEN_LIST.includes(marketInfo.quoteAsset.id)
+            ) {
+              FEE_TOKEN_LIST.push(marketInfo.quoteAsset.id);
+            } 
             break
         default:
             break
@@ -213,30 +229,7 @@ function isOrderFillable(order) {
     const expires = order[7];
     const side = order[3];
     const price = order[4];
-    const sellCurrency = (side === 's') ? market.quoteAsset.symbol : market.baseAsset.symbol;
-    const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
-    const sellQuantity = (side === 's') ? quoteQuantity : baseQuantity;
-    const neededBalanceBN = sellQuantity * 10**sellDecimals;
-    let goodWalletIds = [];
-    Object.keys(WALLETS).forEach(accountId => {
-        const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
-        if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
-            goodWalletIds.push(accountId);
-        }
-    });
-
-    if (goodWalletIds.length === 0) {
-        return { fillable: false, reason: "badbalance" };
-    }
-
-    goodWalletIds = goodWalletIds.filter(accountId => {
-        return !WALLETS[accountId]['ORDER_BROADCASTING'];
-    });
-
-    if (goodWalletIds.length === 0) {
-        return { fillable: false, reason: "sending order already " };
-    }
-
+    
     const now = Date.now() / 1000 | 0;
 
     if (now > expires) {
@@ -256,11 +249,10 @@ function isOrderFillable(order) {
 
     let quote;
     try {
-        quote = genQuote(chainId, marketId, side, baseQuantity);
+      quote = genQuote(chainId, marketId, side, baseQuantity);      
     } catch (e) {
         return { fillable: false, reason: e.message }
     }
-
     if (side == 's' && price > quote.quotePrice) {
         return { fillable: false, reason: "badprice" };
     }
@@ -268,37 +260,61 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "badprice" };
     }
 
+    const sellCurrency = (side === 's') ? market.quoteAsset.symbol : market.baseAsset.symbol;
+    const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
+    const sellQuantity = (side === 's') ? quote.quoteQuantity : baseQuantity;
+    const neededBalanceBN = sellQuantity * 10**sellDecimals;
+    let goodWalletIds = [];
+    Object.keys(WALLETS).forEach(accountId => {
+        const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
+        if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
+            goodWalletIds.push(accountId);
+        }
+    });
+
+    if (goodWalletIds.length === 0) {
+        return { fillable: false, reason: "badbalance" };
+    }
+
+    goodWalletIds = goodWalletIds.filter(accountId => {
+        return !WALLETS[accountId]['ORDER_BROADCASTING'];
+    });
+
+    if (goodWalletIds.length === 0) {
+        return { fillable: false, reason: "sending order already" };
+    }
+
     return { fillable: true, reason: null, walletId: goodWalletIds[0]};
 }
 
 function genQuote(chainId, marketId, side, baseQuantity) {
-    const market = MARKETS[marketId];
-    if (CHAIN_ID !== chainId) throw new Error("badchain");
-    if (!market) throw new Error("badmarket");
-    if (!(['b','s']).includes(side)) throw new Error("badside");
-    if (baseQuantity <= 0) throw new Error("badquantity");
+  const market = MARKETS[marketId];
+  if (CHAIN_ID !== chainId) throw new Error("badchain");
+  if (!market) throw new Error("badmarket");
+  if (!(['b','s']).includes(side)) throw new Error("badside");
+  if (baseQuantity <= 0) throw new Error("badquantity");
 
-    validatePriceFeed(marketId);
+  validatePriceFeed(marketId);
 
-    const mmConfig = MM_CONFIG.pairs[marketId];
-    const mmSide = mmConfig.side || 'd';
-    if (mmSide !== 'd' && mmSide === side) {
-        throw new Error("badside");
-    }
-    const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
-    if (!primaryPrice) throw new Error("badprice");
-    const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
-    let quoteQuantity;
-    if (side === 'b') {
-        quoteQuantity = (baseQuantity * primaryPrice * (1 + SPREAD)) + market.quoteFee;
-    }
-    else if (side === 's') {
-        quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
-    }
-    const quotePrice = (quoteQuantity / baseQuantity).toPrecision(6);
-    if (quotePrice < 0) throw new Error("Amount is inadequate to pay fee");
-    if (isNaN(quotePrice)) throw new Error("Internal Error. No price generated.");
-    return { quotePrice, quoteQuantity };
+  const mmConfig = MM_CONFIG.pairs[marketId];
+  const mmSide = mmConfig.side || 'd';
+  if (mmSide !== 'd' && mmSide === side) {
+      throw new Error("badside");
+  }
+  const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+  if (!primaryPrice) throw new Error("badprice");
+  const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
+  let quoteQuantity;
+  if (side === 'b') {
+      quoteQuantity = (baseQuantity * primaryPrice * (1 + SPREAD)) + market.quoteFee;
+  }
+  else if (side === 's') {
+      quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
+  }
+  const quotePrice = Number((quoteQuantity / baseQuantity).toPrecision(6));
+  if (quotePrice < 0) throw new Error("Amount is inadequate to pay fee");
+  if (isNaN(quotePrice)) throw new Error("Internal Error. No price generated.");
+  return { quotePrice, quoteQuantity };
 }
 
 function validatePriceFeed(marketId) {
@@ -328,79 +344,81 @@ function validatePriceFeed(marketId) {
     // If the secondary price feed varies from the primary price feed by more than 1%, assume something is broken
     const percentDiff = Math.abs(primaryPrice - secondaryPrice) / primaryPrice;
     if (percentDiff > 0.03) {
-        throw new Error("Circuit breaker triggered");
-        console.error("Primary and secondary price feeds do not match!");
+      console.error("Primary and secondary price feeds do not match!");
+      throw new Error("Circuit breaker triggered");
     }
 
     return true;
 }
 
 async function sendFillRequest(orderreceipt, accountId) {
-    const chainId = orderreceipt[0];
-    const orderId = orderreceipt[1];
-    const marketId = orderreceipt[2];
-    const market = MARKETS[marketId];
-    const baseCurrency = market.baseAssetId;
-    const quoteCurrency = market.quoteAssetId;
-    const side = orderreceipt[3];
-    const baseQuantity = orderreceipt[5];
-    const quoteQuantity = orderreceipt[6];
-    const quote = genQuote(chainId, marketId, side, baseQuantity);
-    let tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
-    if (side === "b") {
-        tokenSell = market.baseAssetId;
-        tokenBuy = market.quoteAssetId;
-        sellSymbol = market.baseAsset.symbol;
-        buySymbol = market.quoteAsset.symbol;
-        // Add 1 bip to to protect against rounding errors
-        sellQuantity = (quoteQuantity / quote.quotePrice * 1.0001).toFixed(market.baseAsset.decimals);
-        buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
-    } else if (side === "s") {
-        tokenSell = market.quoteAssetId;
-        tokenBuy = market.baseAssetId;
-        sellSymbol = market.quoteAsset.symbol;
-        buySymbol = market.baseAsset.symbol;
-        // Add 1 bip to to protect against rounding errors
-        sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
-        buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
-    }
-    const sellQuantityParsed = syncProvider.tokenSet.parseToken(
-        tokenSell,
-        sellQuantity
-    );
-    const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(sellQuantityParsed);
-    const tokenRatio = {};
-    tokenRatio[tokenBuy] = buyQuantity;
-    tokenRatio[tokenSell] = sellQuantity;
-    const oneMinExpiry = (Date.now() / 1000 | 0) + 60;
-    const orderDetails = {
-        tokenSell,
-        tokenBuy,
-        amount: sellQuantityPacked,
-        ratio: zksync.utils.tokenRatio(tokenRatio),
-        validUntil: oneMinExpiry
-    }
-    const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
+  const chainId = orderreceipt[0];
+  const orderId = orderreceipt[1];
+  const marketId = orderreceipt[2];
+  const market = MARKETS[marketId];
+  const baseCurrency = market.baseAssetId;
+  const quoteCurrency = market.quoteAssetId;
+  const side = orderreceipt[3];
+  const baseQuantity = orderreceipt[5];
+  const quoteQuantity = orderreceipt[6];
+  const quote = genQuote(chainId, marketId, side, baseQuantity);
+  let tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
+  if (side === "b") {
+      tokenSell = market.baseAssetId;
+      tokenBuy = market.quoteAssetId;
 
-    // Set wallet flag
-    WALLETS[accountId]['ORDER_BROADCASTING'] = true;
+      sellSymbol = market.baseAsset.symbol;
+      buySymbol = market.quoteAsset.symbol;
+      // Add 1 bip to to protect against rounding errors
+      sellQuantity = (baseQuantity * 1.0001).toFixed(market.baseAsset.decimals);
+      buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
+  } else if (side === "s") {
+      tokenSell = market.quoteAssetId;
+      tokenBuy = market.baseAssetId;
 
-    // ORDER_BROADCASTING should not take longer as 5 sec
-    setTimeout(function() {
-        WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-    }, 5000);
+      sellSymbol = market.quoteAsset.symbol;
+      buySymbol = market.baseAsset.symbol;
+      // Add 1 bip to to protect against rounding errors
+      sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
+      buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
+  }
+  const sellQuantityParsed = syncProvider.tokenSet.parseToken(
+      tokenSell,
+      sellQuantity
+  );
+  const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(sellQuantityParsed);
+  const tokenRatio = {};
+  tokenRatio[tokenBuy] = buyQuantity;
+  tokenRatio[tokenSell] = sellQuantity;
+  const oneMinExpiry = (Date.now() / 1000 | 0) + 60;
+  const orderDetails = {
+      tokenSell,
+      tokenBuy,
+      amount: sellQuantityPacked,
+      ratio: zksync.utils.tokenRatio(tokenRatio),
+      validUntil: oneMinExpiry
+  }
+  const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
 
-    const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
-    zigzagws.send(JSON.stringify(resp));
-    rememberOrder(chainId,
-        marketId,
-        orderId, 
-        quote.quotePrice, 
-        sellSymbol,
-        sellQuantity,
-        buySymbol,
-        buyQuantity
-    );
+  // Set wallet flag
+  WALLETS[accountId]['ORDER_BROADCASTING'] = true;
+
+  // ORDER_BROADCASTING should not take longer as 5 sec
+  setTimeout(function() {
+      WALLETS[accountId]['ORDER_BROADCASTING'] = false;
+  }, 5000);
+
+  const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
+  zigzagws.send(JSON.stringify(resp));
+  rememberOrder(chainId,
+      marketId,
+      orderId, 
+      quote.quotePrice, 
+      sellSymbol,
+      sellQuantity,
+      buySymbol,
+      buyQuantity
+  );
 }
 
 async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
@@ -412,11 +430,21 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
         zigzagws.send(JSON.stringify(orderCommitMsg));
         return;
     }
+    // select token to match user's fee token
+    let feeToken;
+    if (FEE_TOKEN) {
+      feeToken = FEE_TOKEN
+    } else {
+      feeToken = (FEE_TOKEN_LIST.includes(swapOffer.tokenSell))
+      ? swapOffer.tokenSell
+      : 'ETH'
+    }
+    
     const randInt = (Math.random()*1000).toFixed(0);
     console.time('syncswap' + randInt);
     const swap = await wallet['syncWallet'].syncSwap({
         orders: [swapOffer, fillOrder],
-        feeToken: "ETH",
+        feeToken: feeToken,
         nonce: fillOrder.nonce
     });
     const txHash = swap.txHash.split(":")[1];
@@ -460,8 +488,10 @@ async function fillOpenOrders() {
         if (fillable.fillable) {
             sendFillRequest(order, fillable.walletId);
             delete OPEN_ORDERS[orderId];
-        }
-        else if (fillable.reason !== "badprice") {
+        }else if (![
+            "sending order already",
+            "badprice"
+          ].includes(fillable.reason)) {
             delete OPEN_ORDERS[orderId];
         }
     }
@@ -482,6 +512,14 @@ async function setupPriceFeeds() {
         }
         const primaryPriceFeed = pairConfig.priceFeedPrimary;
         const secondaryPriceFeed = pairConfig.priceFeedSecondary;
+
+        // parse keys to lower case to match later PRICE_FEED keys
+        if (primaryPriceFeed) {
+          MM_CONFIG.pairs[market].priceFeedPrimary = primaryPriceFeed.toLowerCase();
+        }
+        if (secondaryPriceFeed) {
+          MM_CONFIG.pairs[market].priceFeedSecondary = secondaryPriceFeed.toLowerCase();
+        }
         [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
             if(!priceFeed) { return; }
             const [provider, id] = priceFeed.split(':');
@@ -635,7 +673,7 @@ async function uniswapV3Setup(uniswapV3Address) {
               tokenProvier1.decimals()
             ]);
   
-            const key = 'uniswapV3:' + address;
+            const key = 'uniswapv3:' + address;
             const decimalsRatio = (10**decimals0 / 10**decimals1);  
             UNISWAP_V3_PROVIDERS[key] = [provider, decimalsRatio];
 
@@ -706,18 +744,29 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
         const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
 
-        const splits = mmConfig.numOrdersIndicated || 10;
+        // dont do splits if under 1000 USD
+        const usdBaseBalance = baseBalance * marketInfo.baseAsset.usdPrice;
+        const usdQuoteBalance = quoteBalance * marketInfo.quoteAsset.usdPrice;
+        let buySplits = (usdQuoteBalance < 1000) ? 1 : (mmConfig.numOrdersIndicated || 4);
+        let sellSplits = (usdBaseBalance < 1000) ? 1 : (mmConfig.numOrdersIndicated || 4);
+        
+        if (usdQuoteBalance < (10 * buySplits)) buySplits = Math.floor(usdQuoteBalance / 10)
+        if (usdBaseBalance < (10 * sellSplits)) sellSplits = Math.floor(usdBaseBalance / 10)
+        
         const liquidity = [];
-        for (let i=1; i <= splits; i++) {
-            const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/splits));
-            const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/splits));
+        for (let i=1; i <= buySplits; i++) {
+            const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/buySplits));
             if ((['b','d']).includes(side)) {
-                liquidity.push(["b", buyPrice, maxBuySize / splits, expires]);
-            }
-            if ((['s','d']).includes(side)) {
-                liquidity.push(["s", sellPrice, maxSellSize / splits, expires]);
+                liquidity.push(["b", buyPrice, maxBuySize / buySplits, expires]);
             }
         }
+        for (let i=1; i <= sellSplits; i++) {
+          const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/sellSplits));
+          if ((['s','d']).includes(side)) {
+              liquidity.push(["s", sellPrice, maxSellSize / sellSplits, expires]);
+          }
+      }
+
         const msg = { op: "indicateliq2", args: [CHAIN_ID, marketId, liquidity] };
         try {
             zigzagws.send(JSON.stringify(msg));
@@ -754,11 +803,13 @@ async function afterFill(chainId, orderId, wallet) {
     const sellTokenParsed = syncProvider.tokenSet.parseToken (
         order.sellSymbol,
         order.sellQuantity
-    );    
-    const oldbuyTokenParsed = ethers.BigNumber.from(account_state[order.buySymbol]);
-    const oldsellTokenParsed = ethers.BigNumber.from(account_state[order.sellSymbol]);
-    account_state[order.buySymbol] = (oldbuyTokenParsed.add(buyTokenParsed)).toString();
-    account_state[order.sellSymbol] = (oldsellTokenParsed.sub(sellTokenParsed)).toString();
+    );
+    const oldBuyBalance = account_state[order.buySymbol] ? account_state[order.buySymbol] : '0';
+    const oldSellBalance = account_state[order.sellSymbol] ? account_state[order.sellSymbol] : '0';
+    const oldBuyTokenParsed = ethers.BigNumber.from(oldBuyBalance);
+    const oldSellTokenParsed = ethers.BigNumber.from(oldSellBalance);
+    account_state[order.buySymbol] = (oldBuyTokenParsed.add(buyTokenParsed)).toString();
+    account_state[order.sellSymbol] = (oldSellTokenParsed.sub(sellTokenParsed)).toString();
     
     const indicateMarket = {};
     indicateMarket[marketId] = mmConfig;
@@ -872,34 +923,3 @@ async function updateAccountState() {
     }
 }
 
-async function logBalance() {
-    try {
-        await updateAccountState();
-        // fetch all balances over all wallets per token
-        const balance = {};
-        Object.keys(WALLETS).forEach(accountId => {
-            const committedBalaces = WALLETS[accountId]['account_state'].committed.balances;
-            Object.keys(committedBalaces).forEach(token => {
-                if(balance[token]) {
-                    balance[token] = balance[token] + parseInt(committedBalaces[token]);
-                } else {
-                    balance[token] = parseInt(committedBalaces[token]);
-                }
-            });
-        });
-        // get token price and total in USD
-        let sum = 0;
-        await Promise.all(Object.keys(balance).map(async token => {
-            const price = await syncProvider.getTokenPrice(token.toString());
-            const tokenNumber = await syncProvider.tokenSet.formatToken(token, balance[token].toString())
-            sum = sum + price * tokenNumber;
-        }));
-
-        // log to CVS
-        const date = new Date().toISOString();
-        const content = date + ";" + sum.toFixed(2) + "\n";
-        fs.writeFile('price_csv.txt', content, { flag: 'a+' }, err => {});
-    } catch(err) {
-        // pass
-    }
-}

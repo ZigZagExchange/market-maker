@@ -32,6 +32,31 @@ node marketmaker.js
 
 ## Settings
 
+#### Fee Token
+
+With the defualt setting the bot will pay the zkSync fee wiht the same token as the user (buy currency for the bot). You can chose to override that by a fixed fee token. Check if your tokens is available to pay fees on zkSync [here](https://zkscan.io/explorer/tokens).
+
+```
+{
+    "cryptowatchApiKey": "aaaaxxx",
+    "ethPrivKeys": [
+        "",
+        ""
+    ],    
+    "zigzagChainId": 1,
+    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+    "feeToken": "ETH", <- add this line if you eg. want to pay the fees in Ethereum 
+    "pairs": {
+```
+
+#### Mainnet zkSync
+- "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com"
+- "zigzagChainId": 1
+
+#### Rinkeby zkSync
+- "zigzagWsUrl": "wss://secret-thicket-93345.herokuapp.com"
+- "zigzagChainId": 1000
+
 You can add, remove, and configure pair settings in the `pairs` section. A pair setting looks like this:
 
 ```
@@ -60,11 +85,12 @@ Orders coming in below the `minSpread` from the price feed will not be filled. T
 
 #### Price Feed
 
-There are 3 modes available with a 4th on the way.
+There are 4 modes available with a 5th on the way.
 
 * `cryptowatch`: Follows an external price oracle.
 * `chainlink` : Follows an external price oracle. Chainlink is WEB3 and might be slower then cryptowatch.
 * `constant`: Sets an fixed price and market makes around that price. Can be combined with single-sided liquidity to simulate limit orders.
+* `uniswapV3`: Reads prices on-chain from a specified uniswapV3 pool
 * `independent`: Under development. The price is set independent of a price feed.
 
 **Warning:** Make sure your price feed is close to the price you see on zigzag. **Otherwise, your mm can lose money!**
@@ -91,12 +117,14 @@ Example:
 ###### Chainlink
 With chainlink you have access to price oracles via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
 ```
-"ETH-USDC": {
-    "infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
-    "zigzagChainId": 1,
-    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
-    ....
-}
+
+"infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
+"pairs": {
+  "ETH-USDC": {
+      "zigzagChainId": 1,
+      "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+      ....
+  }
 ```
 You can get the available market contracts [here.](https://docs.chain.link/docs/ethereum-addresses/)Add those to you pair config as "chainlink:<address>", like this:
 ```
@@ -111,12 +139,13 @@ You can get the available market contracts [here.](https://docs.chain.link/docs/
 ###### UniswapV3
 With uniswapV3 you have access to price feed's via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
 ```
-"ETH-USDC": {
-    "infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
-    "zigzagChainId": 1,
-    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
-    ....
-}
+"infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
+"pairs": {
+  "ETH-USDC": {
+      "zigzagChainId": 1,
+      "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+      ....
+  }
 ```
 You can get the available market contracts [here.](https://info.uniswap.org) Select a token and then a pool matching the pair you plan to market make. Make sure base and quote tokens match (USDC-ETH don't work for ETH-USDC). After selecting a pool, you can see the adress in the browser URL. Add that to your pair config as "uniswapv3:<address>", like this:
 ```
