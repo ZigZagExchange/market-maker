@@ -4,6 +4,8 @@ import ethers from 'ethers';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import fs from 'fs';
+import readlineSync from 'readline-sync'
+import CryptoJS from 'crypto-js'
 
 dotenv.config();
 
@@ -21,6 +23,9 @@ let FEE_TOKEN = null;
 
 let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
+
+// input decrypt password
+var passwd = readlineSync.question('please input your password: ',{hideEchoBack: true});
 
 // Load MM config
 let MM_CONFIG;
@@ -78,7 +83,7 @@ try {
         });
     }
     for(let i=0; i<keys.length; i++) {
-        let ethWallet = new ethers.Wallet(keys[i]);
+        let ethWallet = new ethers.Wallet(CryptoJS.AES.decrypt(keys[i], passwd).toString(CryptoJS.enc.Utf8));
         let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
         if (!(await syncWallet.isSigningKeySet())) {
             console.log("setting sign key");
@@ -551,7 +556,8 @@ async function setupPriceFeeds() {
 
 async function cryptowatchWsSetup(cryptowatchMarketIds) {
     // Set initial prices
-    const cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
+    let apiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
+    const cryptowatchApiKey = CryptoJS.AES.decrypt(apiKey, passwd).toString(CryptoJS.enc.Utf8)
     const cryptowatchMarkets = await fetch("https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey).then(r => r.json());
     const cryptowatchMarketPrices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
     for (let i in cryptowatchMarketIds) {
