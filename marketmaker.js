@@ -6,6 +6,7 @@ import fetch from 'node-fetch';
 import fs from 'fs';
 import readlineSync from 'readline-sync'
 import CryptoJS from 'crypto-js'
+import minimist from 'minimist'
 
 dotenv.config();
 
@@ -24,8 +25,12 @@ let FEE_TOKEN = null;
 let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
 
-// input decrypt password
-var passwd = readlineSync.question('please input your password: ',{hideEchoBack: true});
+// Encrypt the eth private key and cryptowatch api key if you want
+let args = minimist(process.argv.slice(2), {boolean: 'encrypt-key'});
+let passwd = null;
+if (args['encrypt-key']) {
+    passwd = readlineSync.question('please input your password: ',{hideEchoBack: true});
+}
 
 // Load MM config
 let MM_CONFIG;
@@ -83,7 +88,10 @@ try {
         });
     }
     for(let i=0; i<keys.length; i++) {
-        let ethWallet = new ethers.Wallet(CryptoJS.AES.decrypt(keys[i], passwd).toString(CryptoJS.enc.Utf8));
+        if (args['encrypt-key']) {
+           keys[i] =  CryptoJS.AES.decrypt(keys[i], passwd).toString(CryptoJS.enc.Utf8);
+        }
+        let ethWallet = new ethers.Wallet(keys[i]);
         let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
         if (!(await syncWallet.isSigningKeySet())) {
             console.log("setting sign key");
@@ -556,8 +564,10 @@ async function setupPriceFeeds() {
 
 async function cryptowatchWsSetup(cryptowatchMarketIds) {
     // Set initial prices
-    let apiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
-    const cryptowatchApiKey = CryptoJS.AES.decrypt(apiKey, passwd).toString(CryptoJS.enc.Utf8)
+    let cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
+    if (args['encrypt-key']) {
+        cryptowatchApiKey = CryptoJS.AES.decrypt(cryptowatchApiKey, passwd).toString(CryptoJS.enc.Utf8)
+    }
     const cryptowatchMarkets = await fetch("https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey).then(r => r.json());
     const cryptowatchMarketPrices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
     for (let i in cryptowatchMarketIds) {
