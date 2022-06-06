@@ -11,7 +11,7 @@ Soon we will add the ability to run standalone markets and this will not be an i
 
 __Do not share your private key__
 
-Running the bot on a VPS has many advantages. But you need to make sure your system is safe. If someone gains access to your system, all files can be compromised. There a quite a few good guides about how to keep your VPS safe:
+Running the bot on a VPS has many advantages. But you need to make sure your system is safe. If someone gains access to your system, all files can be compromised __including your private key__. There a quite a few good guides about how to keep your VPS safe:
 
 - An Introduction to Securing your Linux VPS - [Digitalocean](https://www.digitalocean.com/community/tutorials/an-introduction-to-securing-your-linux-vps)
 - 9 Ways To Keep Your VPS Secure - [namecheap](https://www.namecheap.com/blog/9-ways-to-keep-your-vps-secure/)
