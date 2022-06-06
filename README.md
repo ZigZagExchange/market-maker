@@ -6,6 +6,18 @@ This market maker uses existing price feeds to set bids and asks for a market. F
 
 Soon we will add the ability to run standalone markets and this will not be an issue.
 
+
+## Security advice
+
+__Do not share your private key__
+
+Running the bot on a VPS has many advantages. But you need to make sure your system is safe. If someone gains access to your system, all files can be compromised. There a quite a few good guides about how to keep your VPS safe:
+
+- An Introduction to Securing your Linux VPS - [Digitalocean](https://www.digitalocean.com/community/tutorials/an-introduction-to-securing-your-linux-vps)
+- 9 Ways To Keep Your VPS Secure - [namecheap](https://www.namecheap.com/blog/9-ways-to-keep-your-vps-secure/)
+
+
+
 ## Requirements
 
 * Activated zkSync account
@@ -29,6 +41,18 @@ To run the marketmaker:
 ```bash
 node marketmaker.js
 ```
+
+## Configuration Via Environment Variables
+
+It is __recommended__ to use environment variables to set your private keys. You can set `ETH_PRIVKEY`, `CRYPTOWATCH_API_KEY` and `INFURA_URL` using them. You can set them using `ETH_PRIVKEY=0x____`. For more informations on private keys read [this](https://linuxize.com/post/how-to-set-and-list-environment-variables-in-linux/).
+
+If your hosting service requires you to pass in configs via environment variables you can compress `config.json`:
+
+```
+cat config.json | tr -d ' ' | tr -d '\n'
+```
+
+and set it to the value of the `MM_CONFIG` environment variable to override the config file.
 
 ## Settings
 
@@ -294,15 +318,3 @@ Sell the rip:
     "active": true
 }
 ```
-
-## Configuration Via Environment Variables
-
-If your hosting service requires you to pass in configs via environment variables you can compress `config.json`:
-
-```
-cat config.json | tr -d ' ' | tr -d '\n'
-```
-
-and set it to the value of the `MM_CONFIG` environment variable to override the config file.
-
-You can also override the private key in the config file with the `ETH_PRIVKEY` environment variable, and the cryptowatch API key with the `CRYPTOWATCH_API_KEY` environment variable, and the Infura provider url with `INFURA_URL`
