@@ -1,4 +1,9 @@
 {
+    "secretManager": {
+        "enable": false,
+        "region": "",
+        "secretID": ""
+    },
     "cryptowatchApiKey": "aaaaxxx",
     "ethPrivKeys": [
         "",
