@@ -89,11 +89,9 @@ try {
             console.log(signKeyResult);
         }
         let accountId = await syncWallet.getAccountId();
-        let account_state = await syncWallet.getAccountState();
         WALLETS[accountId] = {
             'ethWallet': ethWallet,
             'syncWallet': syncWallet,
-            'account_state': account_state,
             'ORDER_BROADCASTING': false,
         }
     }
@@ -103,7 +101,8 @@ try {
 }
 
 // Update account state loop
-setInterval(updateAccountState, 900000);
+await updateAccountState();
+setInterval(updateAccountState, 150000);
 
 let fillOrdersInterval, indicateLiquidityInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
@@ -912,14 +911,23 @@ function rememberOrder(chainId, marketId, orderId, price, sellSymbol, sellQuanti
 }
 
 async function updateAccountState() {
+    let lowBalance = false;
     try {
-        Object.keys(WALLETS).forEach(accountId => {
-            (WALLETS[accountId]['syncWallet']).getAccountState().then((state) => {
-                WALLETS[accountId]['account_state'] = state;
-            })
+        const promise = Object.keys(WALLETS).map(accountId => {
+            const accountState = WALLETS[accountId].syncWallet.getAccountState();
+            const ethBalance = accountState?.committed?.balances?.ETH
+                ? ethers.utils.formatEther(accountState.committed.balances.ETH).toNumber()
+                : 0
+            if (ethBalance < 0.01) {
+                lowBalance = true;
+                return;
+            }
+            WALLETS[accountId]['account_state'] = accountState;
         });
+        await Promise.all(promise);
     } catch(err) {
         // pass
     }
+    if (lowBalance) throw new Error('Your ETH balance is to low to run the marketmaker bot. You need at least 0.01 ETH!')
 }
 
