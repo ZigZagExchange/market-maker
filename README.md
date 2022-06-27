@@ -193,6 +193,20 @@ With constant mode, you can set a fixed price to market make. The bot will not c
 }
 ```
 
+###### Invert price feed
+For some pairs, you might just find a price feed for the inverse of the pair. If you want to mm for ZZ-USDC and only find a USDC-ZZ price feed. In those cases, you need to invert the fee. This will only work if the secondary price feed is inverted as well or set to null.
+Example:
+```
+"ETH-USDC": {
+    "side": "d",
+    "priceFeedPrimary": "uniswapv3:0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+    "priceFeedSecondary": null,
+    "invert": true,
+    ....
+}
+```
+
+
 ## Pair Options
 
 These pair options can be set for each pair individual. You can even use more then on option per pair (though they might cancel each other out).

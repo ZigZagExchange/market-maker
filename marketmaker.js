@@ -301,7 +301,9 @@ function genQuote(chainId, marketId, side, baseQuantity) {
   if (mmSide !== 'd' && mmSide === side) {
       throw new Error("badside");
   }
-  const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+  const primaryPrice = (mmConfig.invert)
+    ? (1 / PRICE_FEEDS[mmConfig.priceFeedPrimary])
+    : PRICE_FEEDS[mmConfig.priceFeedPrimary];
   if (!primaryPrice) throw new Error("badprice");
   const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
   let quoteQuantity;
@@ -721,8 +723,10 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
 
         const marketInfo = MARKETS[marketId];
         if (!marketInfo) continue;
-
-        const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+        
+        const midPrice = (mmConfig.invert)
+            ? (1 / PRICE_FEEDS[mmConfig.priceFeedPrimary])
+            : PRICE_FEEDS[mmConfig.priceFeedPrimary];
         if (!midPrice) continue;
 
         const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
