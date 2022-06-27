@@ -6,6 +6,18 @@ This market maker uses existing price feeds to set bids and asks for a market. F
 
 Soon we will add the ability to run standalone markets and this will not be an issue.
 
+
+## Security advice
+
+__Do not share your private key__
+
+Running the bot on a VPS has many advantages. But you need to make sure your system is safe. If someone gains access to your system, all files can be compromised __including your private key__. There a quite a few good guides about how to keep your VPS safe:
+
+- An Introduction to Securing your Linux VPS - [Digitalocean](https://www.digitalocean.com/community/tutorials/an-introduction-to-securing-your-linux-vps)
+- 9 Ways To Keep Your VPS Secure - [namecheap](https://www.namecheap.com/blog/9-ways-to-keep-your-vps-secure/)
+
+
+
 ## Requirements
 
 * Activated zkSync account
@@ -29,6 +41,18 @@ To run the marketmaker:
 ```bash
 node marketmaker.js
 ```
+
+## Configuration Via Environment Variables
+
+It is __recommended__ to use environment variables to set your private keys. You can set `ETH_PRIVKEY`, `CRYPTOWATCH_API_KEY` and `INFURA_URL` using them. You can set them using `ETH_PRIVKEY=0x____`. For more informations on private keys read [this](https://linuxize.com/post/how-to-set-and-list-environment-variables-in-linux/).
+
+If your hosting service requires you to pass in configs via environment variables you can compress `config.json`:
+
+```
+cat config.json | tr -d ' ' | tr -d '\n'
+```
+
+and set it to the value of the `MM_CONFIG` environment variable to override the config file.
 
 ## Settings
 
@@ -169,6 +193,20 @@ With constant mode, you can set a fixed price to market make. The bot will not c
 }
 ```
 
+###### Invert price feed
+For some pairs, you might just find a price feed for the inverse of the pair. If you want to mm for ZZ-USDC and only find a USDC-ZZ price feed. In those cases, you need to invert the fee. This will only work if the secondary price feed is inverted as well or set to null.
+Example:
+```
+"ETH-USDC": {
+    "side": "d",
+    "priceFeedPrimary": "uniswapv3:0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+    "priceFeedSecondary": null,
+    "invert": true,
+    ....
+}
+```
+
+
 ## Pair Options
 
 These pair options can be set for each pair individual. You can even use more then on option per pair (though they might cancel each other out).
@@ -294,15 +332,3 @@ Sell the rip:
     "active": true
 }
 ```
-
-## Configuration Via Environment Variables
-
-If your hosting service requires you to pass in configs via environment variables you can compress `config.json`:
-
-```
-cat config.json | tr -d ' ' | tr -d '\n'
-```
-
-and set it to the value of the `MM_CONFIG` environment variable to override the config file.
-
-You can also override the private key in the config file with the `ETH_PRIVKEY` environment variable, and the cryptowatch API key with the `CRYPTOWATCH_API_KEY` environment variable, and the Infura provider url with `INFURA_URL`

@@ -114,7 +114,7 @@ zigzagws.on('error', console.error);
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
     fillOrdersInterval = setInterval(fillOpenOrders, 200);
-    indicateLiquidityInterval = setInterval(indicateLiquidity, 12500);
+    indicateLiquidityInterval = setInterval(indicateLiquidity, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
@@ -301,7 +301,9 @@ function genQuote(chainId, marketId, side, baseQuantity) {
   if (mmSide !== 'd' && mmSide === side) {
       throw new Error("badside");
   }
-  const primaryPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+  const primaryPrice = (mmConfig.invert)
+    ? (1 / PRICE_FEEDS[mmConfig.priceFeedPrimary])
+    : PRICE_FEEDS[mmConfig.priceFeedPrimary];
   if (!primaryPrice) throw new Error("badprice");
   const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
   let quoteQuantity;
@@ -721,8 +723,10 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
 
         const marketInfo = MARKETS[marketId];
         if (!marketInfo) continue;
-
-        const midPrice = PRICE_FEEDS[mmConfig.priceFeedPrimary];
+        
+        const midPrice = (mmConfig.invert)
+            ? (1 / PRICE_FEEDS[mmConfig.priceFeedPrimary])
+            : PRICE_FEEDS[mmConfig.priceFeedPrimary];
         if (!midPrice) continue;
 
         const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
@@ -747,11 +751,11 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         // dont do splits if under 1000 USD
         const usdBaseBalance = baseBalance * marketInfo.baseAsset.usdPrice;
         const usdQuoteBalance = quoteBalance * marketInfo.quoteAsset.usdPrice;
-        let buySplits = (usdQuoteBalance < 1000) ? 1 : (mmConfig.numOrdersIndicated || 4);
-        let sellSplits = (usdBaseBalance < 1000) ? 1 : (mmConfig.numOrdersIndicated || 4);
+        let buySplits = (usdQuoteBalance && usdQuoteBalance < 1000) ? 1 : (mmConfig.numOrdersIndicated || 4);
+        let sellSplits = (usdBaseBalance && usdBaseBalance < 1000) ? 1 : (mmConfig.numOrdersIndicated || 4);
         
-        if (usdQuoteBalance < (10 * buySplits)) buySplits = Math.floor(usdQuoteBalance / 10)
-        if (usdBaseBalance < (10 * sellSplits)) sellSplits = Math.floor(usdBaseBalance / 10)
+        if (usdQuoteBalance && usdQuoteBalance < (10 * buySplits)) buySplits = Math.floor(usdQuoteBalance / 10)
+        if (usdBaseBalance && usdBaseBalance < (10 * sellSplits)) sellSplits = Math.floor(usdBaseBalance / 10)
         
         const liquidity = [];
         for (let i=1; i <= buySplits; i++) {
