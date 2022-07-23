@@ -4,6 +4,11 @@ import ethers from 'ethers';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import fs from 'fs';
+import {
+  SecretsManagerClient,
+  GetSecretValueCommand,
+} from '@aws-sdk/client-secrets-manager';
+
 
 dotenv.config();
 
@@ -18,6 +23,7 @@ const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 const FEE_TOKEN_LIST = [];
 let FEE_TOKEN = null;
+let SECRET = {};
 
 let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
@@ -43,6 +49,37 @@ for (let marketId in MM_CONFIG.pairs) {
 }
 console.log("ACTIVE PAIRS", activePairs);
 
+if (MM_CONFIG.secretManager?.enable) {
+  // Set the AWS Region.
+  const REGION = MM_CONFIG.secretManager.region;
+  //Set the Secrets Manager Service Object
+  const secretsClient = new SecretsManagerClient({ region: REGION });
+
+  // Set the parameters
+  const params = {
+    SecretId: MM_CONFIG.secretManager.secretID, //e.g. arn:aws:secretsmanager:REGION:XXXXXXXXXXXX:secret:mysecret-XXXXXX
+  };
+
+  let data;
+  try {
+    data = await secretsClient.send(new GetSecretValueCommand(params));
+  } catch (err) {
+    console.log("err", err);
+    throw new Error("can't get secret");
+  }
+
+  let secret;
+  if ("SecretString" in data) {
+    secret = data.SecretString;
+  }
+
+  SECRET = JSON.parse(secret);
+
+  if (SECRET.ethPrivKeys) {
+    SECRET.ethPrivKeys = JSON.parse(SECRET.ethPrivKeys);
+  }
+}
+
 // Connect to zksync
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
@@ -61,13 +98,14 @@ let syncProvider;
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
     const keys = [];
-    const ethPrivKey = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey);
+    const ethPrivKey = (SECRET.ethPrivKey || process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey);
     if(ethPrivKey && ethPrivKey != "") { keys.push(ethPrivKey);  }
     let ethPrivKeys;
-    if (process.env.ETH_PRIVKEYS) {
+    if (SECRET.ethPrivKeys) {
+        ethPrivKeys = SECRET.ethPrivKeys;
+    } else if (process.env.ETH_PRIVKEYS) {
         ethPrivKeys = JSON.parse(process.env.ETH_PRIVKEYS);
-    }
-    else {
+    } else {
         ethPrivKeys = MM_CONFIG.ethPrivKeys;
     }
     if(ethPrivKeys && ethPrivKeys.length > 0) {
@@ -553,7 +591,7 @@ async function setupPriceFeeds() {
 
 async function cryptowatchWsSetup(cryptowatchMarketIds) {
     // Set initial prices
-    const cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
+    const cryptowatchApiKey = SECRET.cryptowatchApiKey || process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
     const cryptowatchMarkets = await fetch("https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey).then(r => r.json());
     const cryptowatchMarketPrices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
     for (let i in cryptowatchMarketIds) {
