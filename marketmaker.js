@@ -1,5 +1,4 @@
 import WebSocket from 'ws';
-import * as zksync from "zksync";
 import ethers from 'ethers';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
@@ -8,7 +7,6 @@ import fs from 'fs';
 dotenv.config();
 
 const CHAIN_ID = 42161;
-const ETH_NETWORK = "mainnet";
 
 // Globals
 const PRICE_FEEDS = {};
@@ -81,7 +79,7 @@ zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
-    sendOrdersInterval = setInterval(sendOrders, 60000);
+    sendOrdersInterval = setInterval(sendOrders, 30000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
@@ -406,7 +404,7 @@ function sendOrders (pairs = MM_CONFIG.pairs) {
             : PRICE_FEEDS[mmConfig.priceFeedPrimary];
         if (!midPrice) continue;
 
-        const expires = (Date.now() / 1000 | 0) + 60; // 60s expiry
+        const expires = (Date.now() / 1000 | 0) + 30; // 30s expiry
         const side = mmConfig.side || 'd';
 
         const maxBaseBalance = BALANCES[marketInfo.baseAsset.symbol].value;
@@ -458,6 +456,11 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
     if (!marketInfo) return null;
     const baseAmount = size;
     const quoteAmount = size * price;
+
+    if (
+        baseAmount < marketInfo.baseFee ||
+        quoteAmount < marketInfo.quoteFee
+    ) return
 
     const baseAmountBN = ethers.utils.parseUnits(
         Number(baseAmount).toFixed(marketInfo.baseAsset.decimals),
@@ -553,13 +556,11 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
       ],
     };
 
-    const signer = await WALLET.getSigner();
-    const signature = await signer._signTypedData(domain, types, Order);
+    const signature = await WALLET._signTypedData(domain, types, Order);
 
     Order.signature = signature;
 
-    console.log("send")
-    //zigzagws.send("submitorder3", [CHAIN_ID, marketId, Order]);
+    zigzagws.send(JSON.stringify({ op: "submitorder3", args: [CHAIN_ID, marketId, Order] }));
 }
 
 function getExchangeAddress() {
