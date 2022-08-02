@@ -51,9 +51,8 @@ const ethersProvider = new ethers.providers.InfuraProvider(
     "mainnet",
     infuraID
 );
-const rollupProvider = new ethers.providers.InfuraProvider(
-    "arbitrum",
-    infuraID
+const rollupProvider = new ethers.providers.JsonRpcProvider(
+    "https://arb1.arbitrum.io/rpc"
 );
 
 const pKey = MM_CONFIG.ethPrivKey
