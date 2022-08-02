@@ -78,7 +78,7 @@ zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
-    sendOrdersInterval = setInterval(sendOrders, 30000);
+    sendOrdersInterval = setInterval(sendOrders, 14000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
@@ -403,7 +403,7 @@ function sendOrders (pairs = MM_CONFIG.pairs) {
             : PRICE_FEEDS[mmConfig.priceFeedPrimary];
         if (!midPrice) continue;
 
-        const expires = (Date.now() / 1000 | 0) + 30; // 30s expiry
+        const expires = (Date.now() / 1000 | 0) + 15; // 15s expiry
         const side = mmConfig.side || 'd';
 
         const maxBaseBalance = BALANCES[marketInfo.baseAsset.symbol].value;
