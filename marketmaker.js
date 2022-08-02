@@ -7,20 +7,22 @@ import fs from 'fs';
 
 dotenv.config();
 
+const CHAIN_ID = 42161;
+const ETH_NETWORK = "mainnet";
+
 // Globals
 const PRICE_FEEDS = {};
-const OPEN_ORDERS = {};
-const NONCES = {};
-const WALLETS = {};
+const BALANCES = {};
 const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
-const PAST_ORDER_LIST = {};
 const FEE_TOKEN_LIST = [];
 let FEE_TOKEN = null;
 
 let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
+
+const ERC20ABI = JSON.parse(fs.readFileSync('ABIs/ERC20.abi'));
 
 // Load MM config
 let MM_CONFIG;
@@ -43,69 +45,35 @@ for (let marketId in MM_CONFIG.pairs) {
 }
 console.log("ACTIVE PAIRS", activePairs);
 
-// Connect to zksync
-const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
-const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
-let ethersProvider;
-const providerUrl = (process.env.INFURA_URL || MM_CONFIG.infuraUrl);
-if(providerUrl && ETH_NETWORK=="mainnet") {
-    ethersProvider = ethers.getDefaultProvider(providerUrl);
-} else {
-    ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
-}
+const infuraID = MM_CONFIG.infura
+    ? MM_CONFIG.infura
+    : process.env.INFURA
+
+const ethersProvider = new ethers.providers.InfuraProvider(
+    "mainnet",
+    infuraID
+);
+const rollupProvider = new ethers.providers.InfuraProvider(
+    "arbitrum",
+    infuraID
+);
+
+const pKey = MM_CONFIG.ethPrivKey
+    ? MM_CONFIG.ethPrivKey
+    : process.env.ETH_PRIVKEY
+const WALLET = new ethers.Wallet(
+    pKey,
+    rollupProvider
+).connect(rollupProvider)
 
 // Start price feeds
 await setupPriceFeeds();
 
-let syncProvider;
-try {
-    syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
-    const keys = [];
-    const ethPrivKey = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey);
-    if(ethPrivKey && ethPrivKey != "") { keys.push(ethPrivKey);  }
-    let ethPrivKeys;
-    if (process.env.ETH_PRIVKEYS) {
-        ethPrivKeys = JSON.parse(process.env.ETH_PRIVKEYS);
-    }
-    else {
-        ethPrivKeys = MM_CONFIG.ethPrivKeys;
-    }
-    if(ethPrivKeys && ethPrivKeys.length > 0) {
-        ethPrivKeys.forEach( key => {
-            if(key != "" && !keys.includes(key)) {
-                keys.push(key);
-            }
-        });
-    }
-    for(let i=0; i<keys.length; i++) {
-        let ethWallet = new ethers.Wallet(keys[i]);
-        let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
-        if (!(await syncWallet.isSigningKeySet())) {
-            console.log("setting sign key");
-            const signKeyResult = await syncWallet.setSigningKey({
-                feeToken: "ETH",
-                ethAuthType: "ECDSA",
-            });
-            console.log(signKeyResult);
-        }
-        let accountId = await syncWallet.getAccountId();
-        let account_state = await syncWallet.getAccountState();
-        WALLETS[accountId] = {
-            'ethWallet': ethWallet,
-            'syncWallet': syncWallet,
-            'account_state': account_state,
-            'ORDER_BROADCASTING': false,
-        }
-    }
-} catch (e) {
-    console.log(e);
-    throw new Error("Could not connect to zksync API");
-}
-
 // Update account state loop
-setInterval(updateAccountState, 900000);
+setTimeout(getBalances, 5000);
+setInterval(getBalances, 900000);
 
-let fillOrdersInterval, indicateLiquidityInterval;
+let sendOrdersInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
 zigzagws.on('open', onWsOpen);
 zigzagws.on('close', onWsClose);
@@ -113,8 +81,7 @@ zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
-    fillOrdersInterval = setInterval(fillOpenOrders, 200);
-    indicateLiquidityInterval = setInterval(indicateLiquidity, 5000);
+    sendOrdersInterval = setInterval(sendOrders, 60000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
@@ -126,8 +93,7 @@ function onWsOpen() {
 function onWsClose () {
     console.log("Websocket closed. Restarting");
     setTimeout(() => {
-        clearInterval(fillOrdersInterval)
-        clearInterval(indicateLiquidityInterval)
+        clearInterval(sendOrdersInterval)
         zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
         zigzagws.on('open', onWsOpen);
         zigzagws.on('close', onWsClose);
@@ -137,49 +103,11 @@ function onWsClose () {
 
 async function handleMessage(json) {
     const msg = JSON.parse(json);
-    if (!(["lastprice", "liquidity2", "fillstatus", "marketinfo"]).includes(msg.op)) console.log(json.toString());
+    if (!(["fills", "orders", "lastprice", "liquidity2", "fillstatus", "marketinfo"]).includes(msg.op)) console.log(json.toString());
     switch(msg.op) {
         case 'error':
-            const accountId = msg.args?.[1];
-            if(msg.args[0] == 'fillrequest' && accountId) {
-                WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-            }         
+            console.log(msg)
             break;
-        case 'orders':
-            const orders = msg.args[0];
-            orders.forEach(order => {
-                const orderId = order[1];
-                const fillable = isOrderFillable(order);
-                console.log(fillable);
-                if (fillable.fillable) {
-                    sendFillRequest(order, fillable.walletId);
-                } else if ([
-                  "sending order already",
-                  "badprice"
-                ].includes(fillable.reason)) {
-                    OPEN_ORDERS[orderId] = order;
-                }
-            });
-            break
-        case "userordermatch":
-            const chainId = msg.args[0];
-            const orderId = msg.args[1];
-            const fillOrder = msg.args[3];
-            const wallet = WALLETS[fillOrder.accountId];
-            if(!wallet) {
-                console.error("No wallet with this accountId: "+fillOrder.accountId);
-                break
-            } else {
-                try {
-                    await broadcastFill(chainId, orderId, msg.args[2], fillOrder, wallet);
-                } catch (e) {
-                    const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'r',null,e.message]]]}
-                    zigzagws.send(JSON.stringify(orderCommitMsg));
-                    console.error(e);
-                }
-                wallet['ORDER_BROADCASTING'] = false;
-            }
-            break
         case "marketinfo":
             const marketInfo = msg.args[0];
             const marketId  = marketInfo.alias;
@@ -195,6 +123,7 @@ async function handleMessage(json) {
             const newBaseFee = MARKETS[marketId].baseFee;
             const newQuoteFee = MARKETS[marketId].quoteFee;
             console.log(`marketinfo ${marketId} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
+            
             if (FEE_TOKEN) break
             if(
               marketInfo.baseAsset.enabledForFees &&
@@ -207,116 +136,11 @@ async function handleMessage(json) {
               !FEE_TOKEN_LIST.includes(marketInfo.quoteAsset.id)
             ) {
               FEE_TOKEN_LIST.push(marketInfo.quoteAsset.id);
-            } 
+            }
             break
         default:
             break
     }
-}
-
-function isOrderFillable(order) {
-    const chainId = order[0];
-    const marketId = order[2];
-    const market = MARKETS[marketId];
-    const mmConfig = MM_CONFIG.pairs[marketId];
-    const mmSide = (mmConfig.side) ? mmConfig.side : 'd';
-    if (chainId != CHAIN_ID) return { fillable: false, reason: "badchain" }
-    if (!market) return { fillable: false, reason: "badmarket" }
-    if (!mmConfig.active) return { fillable: false, reason: "inactivemarket" }
-
-    const baseQuantity = order[5];
-    const quoteQuantity = order[6];
-    const expires = order[7];
-    const side = order[3];
-    const price = order[4];
-    
-    const now = Date.now() / 1000 | 0;
-
-    if (now > expires) {
-        return { fillable: false, reason: "expired" };
-    }
-
-    if (mmSide !== 'd' && mmSide == side) {
-        return { fillable: false, reason: "badside" };
-    }
-
-    if (baseQuantity < mmConfig.minSize) {
-        return { fillable: false, reason: "badsize" };
-    }
-    else if (baseQuantity > mmConfig.maxSize) {
-        return { fillable: false, reason: "badsize" };
-    }
-
-    let quote;
-    try {
-      quote = genQuote(chainId, marketId, side, baseQuantity);      
-    } catch (e) {
-        return { fillable: false, reason: e.message }
-    }
-    if (side == 's' && price > quote.quotePrice) {
-        return { fillable: false, reason: "badprice" };
-    }
-    else if (side == 'b' && price < quote.quotePrice) {
-        return { fillable: false, reason: "badprice" };
-    }
-
-    const sellCurrency = (side === 's') ? market.quoteAsset.symbol : market.baseAsset.symbol;
-    const sellDecimals = (side === 's') ? market.quoteAsset.decimals : market.baseAsset.decimals;
-    const sellQuantity = (side === 's') ? quote.quoteQuantity : baseQuantity;
-    const neededBalanceBN = sellQuantity * 10**sellDecimals;
-    let goodWalletIds = [];
-    Object.keys(WALLETS).forEach(accountId => {
-        const walletBalance = WALLETS[accountId]['account_state'].committed.balances[sellCurrency];
-        if (Number(walletBalance) > (neededBalanceBN * 1.05)) {
-            goodWalletIds.push(accountId);
-        }
-    });
-
-    if (goodWalletIds.length === 0) {
-        return { fillable: false, reason: "badbalance" };
-    }
-
-    goodWalletIds = goodWalletIds.filter(accountId => {
-        return !WALLETS[accountId]['ORDER_BROADCASTING'];
-    });
-
-    if (goodWalletIds.length === 0) {
-        return { fillable: false, reason: "sending order already" };
-    }
-
-    return { fillable: true, reason: null, walletId: goodWalletIds[0]};
-}
-
-function genQuote(chainId, marketId, side, baseQuantity) {
-  const market = MARKETS[marketId];
-  if (CHAIN_ID !== chainId) throw new Error("badchain");
-  if (!market) throw new Error("badmarket");
-  if (!(['b','s']).includes(side)) throw new Error("badside");
-  if (baseQuantity <= 0) throw new Error("badquantity");
-
-  validatePriceFeed(marketId);
-
-  const mmConfig = MM_CONFIG.pairs[marketId];
-  const mmSide = mmConfig.side || 'd';
-  if (mmSide !== 'd' && mmSide === side) {
-      throw new Error("badside");
-  }
-  const primaryPrice = (mmConfig.invert)
-    ? (1 / PRICE_FEEDS[mmConfig.priceFeedPrimary])
-    : PRICE_FEEDS[mmConfig.priceFeedPrimary];
-  if (!primaryPrice) throw new Error("badprice");
-  const SPREAD = mmConfig.minSpread + (baseQuantity * mmConfig.slippageRate);
-  let quoteQuantity;
-  if (side === 'b') {
-      quoteQuantity = (baseQuantity * primaryPrice * (1 + SPREAD)) + market.quoteFee;
-  }
-  else if (side === 's') {
-      quoteQuantity = (baseQuantity - market.baseFee) * primaryPrice * (1 - SPREAD);
-  }
-  const quotePrice = Number((quoteQuantity / baseQuantity).toPrecision(6));
-  if (quotePrice < 0) throw new Error("Amount is inadequate to pay fee");
-  if (isNaN(quotePrice)) throw new Error("Internal Error. No price generated.");
-  return { quotePrice, quoteQuantity };
 }
 
 function validatePriceFeed(marketId) {
@@ -351,152 +175,6 @@ function validatePriceFeed(marketId) {
     }
 
     return true;
-}
-
-async function sendFillRequest(orderreceipt, accountId) {
-  const chainId = orderreceipt[0];
-  const orderId = orderreceipt[1];
-  const marketId = orderreceipt[2];
-  const market = MARKETS[marketId];
-  const baseCurrency = market.baseAssetId;
-  const quoteCurrency = market.quoteAssetId;
-  const side = orderreceipt[3];
-  const baseQuantity = orderreceipt[5];
-  const quoteQuantity = orderreceipt[6];
-  const quote = genQuote(chainId, marketId, side, baseQuantity);
-  let tokenSell, tokenBuy, sellQuantity, buyQuantity, buySymbol, sellSymbol;
-  if (side === "b") {
-      tokenSell = market.baseAssetId;
-      tokenBuy = market.quoteAssetId;
-
-      sellSymbol = market.baseAsset.symbol;
-      buySymbol = market.quoteAsset.symbol;
-      // Add 1 bip to to protect against rounding errors
-      sellQuantity = (baseQuantity * 1.0001).toFixed(market.baseAsset.decimals);
-      buyQuantity = (quote.quoteQuantity * 0.9999).toFixed(market.quoteAsset.decimals);
-  } else if (side === "s") {
-      tokenSell = market.quoteAssetId;
-      tokenBuy = market.baseAssetId;
-
-      sellSymbol = market.quoteAsset.symbol;
-      buySymbol = market.baseAsset.symbol;
-      // Add 1 bip to to protect against rounding errors
-      sellQuantity = (quote.quoteQuantity * 1.0001).toFixed(market.quoteAsset.decimals);
-      buyQuantity = (baseQuantity * 0.9999).toFixed(market.baseAsset.decimals);
-  }
-  const sellQuantityParsed = syncProvider.tokenSet.parseToken(
-      tokenSell,
-      sellQuantity
-  );
-  const sellQuantityPacked = zksync.utils.closestPackableTransactionAmount(sellQuantityParsed);
-  const tokenRatio = {};
-  tokenRatio[tokenBuy] = buyQuantity;
-  tokenRatio[tokenSell] = sellQuantity;
-  const oneMinExpiry = (Date.now() / 1000 | 0) + 60;
-  const orderDetails = {
-      tokenSell,
-      tokenBuy,
-      amount: sellQuantityPacked,
-      ratio: zksync.utils.tokenRatio(tokenRatio),
-      validUntil: oneMinExpiry
-  }
-  const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
-
-  // Set wallet flag
-  WALLETS[accountId]['ORDER_BROADCASTING'] = true;
-
-  // ORDER_BROADCASTING should not take longer as 5 sec
-  setTimeout(function() {
-      WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-  }, 5000);
-
-  const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
-  zigzagws.send(JSON.stringify(resp));
-  rememberOrder(chainId,
-      marketId,
-      orderId, 
-      quote.quotePrice, 
-      sellSymbol,
-      sellQuantity,
-      buySymbol,
-      buyQuantity
-  );
-}
-
-async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
-    // Nonce check
-    const nonce = swapOffer.nonce;
-    const userNonce = NONCES[swapOffer.accountId];
-    if (nonce <= userNonce) {
-        const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'r',null,"Order failed userNonce check."]]]}
-        zigzagws.send(JSON.stringify(orderCommitMsg));
-        return;
-    }
-    // select token to match user's fee token
-    let feeToken;
-    if (FEE_TOKEN) {
-      feeToken = FEE_TOKEN
-    } else {
-      feeToken = (FEE_TOKEN_LIST.includes(swapOffer.tokenSell))
-      ? swapOffer.tokenSell
-      : 'ETH'
-    }
-    
-    const randInt = (Math.random()*1000).toFixed(0);
-    console.time('syncswap' + randInt);
-    const swap = await wallet['syncWallet'].syncSwap({
-        orders: [swapOffer, fillOrder],
-        feeToken: feeToken,
-        nonce: fillOrder.nonce
-    });
-    const txHash = swap.txHash.split(":")[1];
-    const txHashMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'b',txHash]]]}
-    zigzagws.send(JSON.stringify(txHashMsg));
-    console.timeEnd('syncswap' + randInt);
-
-    console.time('receipt' + randInt);
-    let receipt, success = false;
-    try {
-        receipt = await swap.awaitReceipt();
-        if (receipt.success) {
-            success = true;
-            NONCES[swapOffer.accountId] = swapOffer.nonce;
-        }
-    } catch (e) {
-        receipt = null;
-        success = false;
-    }
-    console.timeEnd('receipt' + randInt);
-    console.log("Swap broadcast result", {swap, receipt});
-
-    let newStatus, error;
-    if(success) {
-        afterFill(chainId, orderId, wallet);
-        newStatus = 'f';
-        error = null;
-   } else {
-        newStatus = 'r';
-        error = swap.error.toString();
-   }
-
-    const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
-    zigzagws.send(JSON.stringify(orderCommitMsg));
-}
-
-async function fillOpenOrders() {
-    for (let orderId in OPEN_ORDERS) {
-        const order = OPEN_ORDERS[orderId];
-        const fillable = isOrderFillable(order);
-        if (fillable.fillable) {
-            sendFillRequest(order, fillable.walletId);
-            delete OPEN_ORDERS[orderId];
-        }else if (![
-            "sending order already",
-            "badprice"
-          ].includes(fillable.reason)) {
-            delete OPEN_ORDERS[orderId];
-        }
-    }
 }
 
 async function setupPriceFeeds() {
@@ -650,7 +328,6 @@ async function uniswapV3Setup(uniswapV3Address) {
     const results = uniswapV3Address.map(async (address) => {
         try {
             const IUniswapV3PoolABI = JSON.parse(fs.readFileSync('ABIs/IUniswapV3Pool.abi'));
-            const ERC20ABI = JSON.parse(fs.readFileSync('ABIs/ERC20.abi'));
   
             const provider = new ethers.Contract(address, IUniswapV3PoolABI, ethersProvider);
             
@@ -709,7 +386,7 @@ async function uniswapV3Update() {
     }
 }
 
-function indicateLiquidity (pairs = MM_CONFIG.pairs) {
+function sendOrders (pairs = MM_CONFIG.pairs) {
     for(const marketId in pairs) {
         const mmConfig = pairs[marketId];
         if(!mmConfig || !mmConfig.active) continue;
@@ -717,7 +394,7 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         try {
             validatePriceFeed(marketId);
         } catch(e) {
-            console.error("Can not indicateLiquidity ("+marketId+") because: " + e);
+            console.error("Can not sendOrders ("+marketId+") because: " + e);
             continue;
         }
 
@@ -729,20 +406,11 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
             : PRICE_FEEDS[mmConfig.priceFeedPrimary];
         if (!midPrice) continue;
 
-        const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
+        const expires = (Date.now() / 1000 | 0) + 60; // 60s expiry
         const side = mmConfig.side || 'd';
 
-        let maxBaseBalance = 0, maxQuoteBalance = 0;
-        Object.keys(WALLETS).forEach(accountId => {
-            const walletBase = WALLETS[accountId]['account_state'].committed.balances[marketInfo.baseAsset.symbol];
-            const walletQuote = WALLETS[accountId]['account_state'].committed.balances[marketInfo.quoteAsset.symbol];
-            if (Number(walletBase) > maxBaseBalance) {
-                maxBaseBalance = walletBase;
-            }
-            if (Number(walletQuote) > maxQuoteBalance) {
-                maxQuoteBalance = walletQuote;
-            }
-        });
+        const maxBaseBalance = BALANCES[marketInfo.baseAsset.symbol].value;
+        const maxQuoteBalance = BALANCES[marketInfo.quoteAsset.symbol].value;
         const baseBalance = maxBaseBalance / 10**marketInfo.baseAsset.decimals;
         const quoteBalance = maxQuoteBalance / 10**marketInfo.quoteAsset.decimals;
         const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
@@ -757,173 +425,221 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
         if (usdQuoteBalance && usdQuoteBalance < (10 * buySplits)) buySplits = Math.floor(usdQuoteBalance / 10)
         if (usdBaseBalance && usdBaseBalance < (10 * sellSplits)) sellSplits = Math.floor(usdBaseBalance / 10)
         
-        const liquidity = [];
         for (let i=1; i <= buySplits; i++) {
             const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/buySplits));
             if ((['b','d']).includes(side)) {
-                liquidity.push(["b", buyPrice, maxBuySize / buySplits, expires]);
+                submitOrder(
+                    marketId,
+                    "b",
+                    buyPrice,
+                    (maxBuySize / buySplits) - marketInfo.baseFee,
+                    expires
+                );
             }
         }
         for (let i=1; i <= sellSplits; i++) {
-          const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/sellSplits));
-          if ((['s','d']).includes(side)) {
-              liquidity.push(["s", sellPrice, maxSellSize / sellSplits, expires]);
-          }
-      }
-
-        const msg = { op: "indicateliq2", args: [CHAIN_ID, marketId, liquidity] };
-        try {
-            zigzagws.send(JSON.stringify(msg));
-        } catch (e) {
-            console.error("Could not send liquidity");
-            console.error(e);
-        }
+            const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/sellSplits));
+            if ((['s','d']).includes(side)) {
+                submitOrder(
+                    marketId,
+                    "s",
+                    sellPrice,
+                    (maxSellSize / sellSplits) - marketInfo.baseFee,
+                    expires
+                );
+            }
+        }    
     }
 }
 
-function cancelLiquidity (chainId, marketId) {
-    const msg = { op: "indicateliq2", args: [chainId, marketId, []] };
-    try {
-        zigzagws.send(JSON.stringify(msg));
-    } catch (e) {
-        console.error("Could not send liquidity");
-        console.error(e);
-    }
-}
+async function submitOrder (marketId, side, price, size, expirationTimeSeconds) {
+    console.log(`Side: ${side}, price ${price}, size: ${size}`);
+    const marketInfo = MARKETS[marketId];
+    if (!marketInfo) return null;
+    const baseAmount = size;
+    const quoteAmount = size * price;
 
-async function afterFill(chainId, orderId, wallet) {
-    const order = PAST_ORDER_LIST[orderId];
-    if(!order) { return; }
-    const marketId = order.marketId;
-    const mmConfig = MM_CONFIG.pairs[marketId];
-    if(!mmConfig) { return; }
-
-    // update account state from order
-    const account_state = wallet['account_state'].committed.balances;
-    const buyTokenParsed = syncProvider.tokenSet.parseToken (
-        order.buySymbol,
-        order.buyQuantity
+    const baseAmountBN = ethers.utils.parseUnits(
+        Number(baseAmount).toFixed(marketInfo.baseAsset.decimals),
+        marketInfo.baseAsset.decimals
     );
-    const sellTokenParsed = syncProvider.tokenSet.parseToken (
-        order.sellSymbol,
-        order.sellQuantity
+    const quoteAmountBN = ethers.utils.parseUnits(
+        Number(quoteAmount).toFixed(marketInfo.quoteAsset.decimals),
+        marketInfo.quoteAsset.decimals
     );
-    const oldBuyBalance = account_state[order.buySymbol] ? account_state[order.buySymbol] : '0';
-    const oldSellBalance = account_state[order.sellSymbol] ? account_state[order.sellSymbol] : '0';
-    const oldBuyTokenParsed = ethers.BigNumber.from(oldBuyBalance);
-    const oldSellTokenParsed = ethers.BigNumber.from(oldSellBalance);
-    account_state[order.buySymbol] = (oldBuyTokenParsed.add(buyTokenParsed)).toString();
-    account_state[order.sellSymbol] = (oldSellTokenParsed.sub(sellTokenParsed)).toString();
-    
-    const indicateMarket = {};
-    indicateMarket[marketId] = mmConfig;
-    if(mmConfig.delayAfterFill) {
-        let delayAfterFillMinSize
-        if(
-            !Array.isArray(mmConfig.delayAfterFill) ||
-            !mmConfig.delayAfterFill[1]
-        ) {
-            delayAfterFillMinSize = 0;
-        } else {
-            delayAfterFillMinSize = mmConfig.delayAfterFill[1]
-        }
 
-        if(order.baseQuantity > delayAfterFillMinSize)  {
-            // no array -> old config
-            // or array and buyQuantity over minSize
-            mmConfig.active = false;
-            cancelLiquidity (chainId, marketId);
-            console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
-            setTimeout(() => {
-                mmConfig.active = true;
-                console.log(`Set ${marketId} active.`);
-                indicateLiquidity(indicateMarket);
-            }, mmConfig.delayAfterFill * 1000);   
-        }             
-    }
-
-    // increaseSpreadAfterFill size might not be set
-    const increaseSpreadAfterFillMinSize = (mmConfig.increaseSpreadAfterFill?.[2]) 
-        ? mmConfig.increaseSpreadAfterFill[2]
-        : 0
-    if(
-        mmConfig.increaseSpreadAfterFill &&
-        order.baseQuantity > increaseSpreadAfterFillMinSize
-        
-    ) {
-        const [spread, time] = mmConfig.increaseSpreadAfterFill;
-        mmConfig.minSpread = mmConfig.minSpread + spread;
-        console.log(`Changed ${marketId} minSpread by ${spread}.`);
-        indicateLiquidity(indicateMarket);
-        setTimeout(() => {
-            mmConfig.minSpread = mmConfig.minSpread - spread;
-            console.log(`Changed ${marketId} minSpread by -${spread}.`);
-            indicateLiquidity(indicateMarket);
-        }, time * 1000);
-    }
-
-    // changeSizeAfterFill size might not be set
-    const changeSizeAfterFillMinSize = (mmConfig.changeSizeAfterFill?.[2]) 
-        ? mmConfig.changeSizeAfterFill[2]
-        : 0
-    if(
-        mmConfig.changeSizeAfterFill &&
-        order.baseQuantity > changeSizeAfterFillMinSize
-    ) {
-        const [size, time] = mmConfig.changeSizeAfterFill;
-        mmConfig.maxSize = mmConfig.maxSize + size;
-        console.log(`Changed ${marketId} maxSize by ${size}.`);
-        indicateLiquidity(indicateMarket);
-        setTimeout(() => {
-            mmConfig.maxSize = mmConfig.maxSize - size;
-            console.log(`Changed ${marketId} maxSize by ${(size* (-1))}.`);
-            indicateLiquidity(indicateMarket);
-        }, time * 1000);
-    }
-}
-
-function rememberOrder(chainId, marketId, orderId, price, sellSymbol, sellQuantity, buySymbol, buyQuantity) {
-    const timestamp = Date.now() / 1000;
-    for (const [key, value] of Object.entries(PAST_ORDER_LIST)) {
-        if (value['expiry'] < timestamp) {
-            delete PAST_ORDER_LIST[key];
-        }
-    }
-
-    const [baseSymbol, quoteSymbol] = marketId.split('-')
-    let baseQuantity, quoteQuantity;
-    if(sellSymbol === baseSymbol) {
-        baseQuantity = sellQuantity;
-        quoteQuantity = buyQuantity;
+    const [baseToken, quoteToken] = marketId.split('-');
+    let makerToken, takerToken, makerAmountBN, takerAmountBN, gasFeeBN, balanceBN;
+    if (side === "s") {
+      makerToken = marketInfo.baseAsset.address;
+      takerToken = marketInfo.quoteAsset.address;
+      makerAmountBN = baseAmountBN;
+      takerAmountBN = quoteAmountBN.mul(99999).div(100000);
+      gasFeeBN = ethers.utils.parseUnits(
+        Number(marketInfo.baseFee).toFixed(marketInfo.baseAsset.decimals),
+        marketInfo.baseAsset.decimals
+      );
+      balanceBN = BALANCES[baseToken].value;
     } else {
-        baseQuantity = buyQuantity;
-        quoteQuantity = sellQuantity;
+      makerToken = marketInfo.quoteAsset.address;
+      takerToken = marketInfo.baseAsset.address;
+      makerAmountBN = quoteAmountBN;
+      takerAmountBN = baseAmountBN.mul(99999).div(100000);
+      gasFeeBN = ethers.utils.parseUnits(
+        Number(marketInfo.quoteFee).toFixed(marketInfo.quoteAsset.decimals),
+        marketInfo.quoteAsset.decimals
+      );
+      balanceBN = BALANCES[quoteToken].value;
     }
 
-    const expiry = timestamp + 900;
-    PAST_ORDER_LIST[orderId] = {
-        'chainId': chainId,
-        'marketId': marketId,
-        'price': price,
-        'baseQuantity': baseQuantity,
-        'quoteQuantity': quoteQuantity,
-        'sellSymbol': sellSymbol,
-        'sellQuantity': sellQuantity,
-        'buySymbol': buySymbol,
-        'buyQuantity': buyQuantity,
-        'expiry':expiry
+    const makerVolumeFeeBN = quoteAmountBN
+      .div(10000)
+      .mul(marketInfo.makerVolumeFee * 100);
+    const takerVolumeFeeBN = baseAmountBN
+      .div(10000)
+      .mul(marketInfo.takerVolumeFee * 100);
+
+    // size check
+    if (makerVolumeFeeBN.gte(takerVolumeFeeBN)) {
+      balanceBN = balanceBN.sub(gasFeeBN).sub(makerVolumeFeeBN);
+    } else {
+      balanceBN = balanceBN.sub(gasFeeBN).sub(takerVolumeFeeBN);
+    }
+    const delta = makerAmountBN.mul("1000").div(balanceBN).toNumber();
+    if (delta > 1001) {
+      // 100.1 %
+      throw new Error(`Amount exceeds balance.`);
+    }
+    // prevent dust issues
+    if (delta > 999) {
+      // 99.9 %
+      makerAmountBN = balanceBN;
+    }
+
+    const account = await WALLET.getAddress();
+    const Order = {
+      makerAddress: account,
+      makerToken: makerToken,
+      takerToken: takerToken,
+      feeRecipientAddress: marketInfo.feeAddress,
+      makerAssetAmount: makerAmountBN.toString(),
+      takerAssetAmount: takerAmountBN.toString(),
+      makerVolumeFee: makerVolumeFeeBN.toString(),
+      takerVolumeFee: takerVolumeFeeBN.toString(),
+      gasFee: gasFeeBN.toString(),
+      expirationTimeSeconds: expirationTimeSeconds.toFixed(0),
+      salt: (Math.random() * 123456789).toFixed(0),
     };
+
+    const domain = {
+      name: "ZigZag",
+      version: "4",
+      chainId: CHAIN_ID,
+    };
+
+    const types = {
+      Order: [
+        { name: "makerAddress", type: "address" },
+        { name: "makerToken", type: "address" },
+        { name: "takerToken", type: "address" },
+        { name: "feeRecipientAddress", type: "address" },
+        { name: "makerAssetAmount", type: "uint256" },
+        { name: "takerAssetAmount", type: "uint256" },
+        { name: "makerVolumeFee", type: "uint256" },
+        { name: "takerVolumeFee", type: "uint256" },
+        { name: "gasFee", type: "uint256" },
+        { name: "expirationTimeSeconds", type: "uint256" },
+        { name: "salt", type: "uint256" },
+      ],
+    };
+
+    const signer = await WALLET.getSigner();
+    const signature = await signer._signTypedData(domain, types, Order);
+
+    Order.signature = signature;
+
+    console.log("send")
+    //zigzagws.send("submitorder3", [CHAIN_ID, marketId, Order]);
 }
 
-async function updateAccountState() {
-    try {
-        Object.keys(WALLETS).forEach(accountId => {
-            (WALLETS[accountId]['syncWallet']).getAccountState().then((state) => {
-                WALLETS[accountId]['account_state'] = state;
-            })
-        });
-    } catch(err) {
-        // pass
+function getExchangeAddress() {
+    const marketInfo = Object.values(MARKETS)[0];
+    return marketInfo?.exchangeAddress;
+};
+
+function getCurrencies() {
+    const tickers = new Set();
+    activePairs.forEach(pair =>{
+        tickers.add(pair.split("-")[0]);
+        tickers.add(pair.split("-")[1]);
+    })
+    return [...tickers];
+};
+
+function getPairs() {
+    return Object.keys(MARKETS);
+};
+
+function getCurrencyInfo(currency) {
+    const pairs = getPairs();
+    for (let i = 0; i < pairs.length; i++) {
+      const pair = pairs[i];
+      const marketInfo = MARKETS[pair]
+      const baseCurrency = pair.split("-")[0];
+      const quoteCurrency = pair.split("-")[1];
+      if (baseCurrency === currency && marketInfo) {
+        return marketInfo.baseAsset;
+      } else if (quoteCurrency === currency && marketInfo) {
+        return marketInfo.quoteAsset;
+      }
     }
+    return null;
+};
+
+async function getBalances () {
+    const contractAddress = getExchangeAddress();
+    const tokens = getCurrencies();
+    const Promis = tokens.map(async(token) => {
+        BALANCES[token] = await getBalanceOfCurrency(
+            token,
+            contractAddress
+        );
+    });
+    await Promise.all(Promis);
 }
 
+async function getBalanceOfCurrency(token, contractAddress) {
+    const account = await WALLET.getAddress();
+    let result = { value: 0, allowance: ethers.constants.Zero };
+    if (!rollupProvider) return result;
+
+    try {
+      if (token === "ETH") {
+        result.value = await rollupProvider.getBalance(account);
+        result.allowance = ethers.constants.MaxUint256;
+        return result;
+      }
+      const tokenInfo = getCurrencyInfo(token);
+
+      if (!tokenInfo || !tokenInfo.address) return result;
+
+      const contract = new ethers.Contract(
+        tokenInfo.address,
+        ERC20ABI,
+        rollupProvider
+      );
+      result.value = await contract.balanceOf(account);
+      if (contractAddress) {
+        result.allowance =  await contract.allowance(account, contractAddress);
+      } else {
+        result.allowance = 0;
+      }
+      if ((result.value).gte(result.allowance)) {
+        result.value = result.allowance;
+      }
+      return result;
+    } catch (e) {
+      console.log(e);
+      return result;
+    }
+};

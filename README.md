@@ -34,8 +34,6 @@ Copy the `config.json.EXAMPLE` file to `config.json` to get started.
 
 Set your `eth_privkey` to be able to relay transactions. The ETH address with that private key should be loaded up with adequate funds for market making.
 
-Currently zkSync needs around 5 seconds to process a single swap and generate the receipt. So  there is a upper limit of 12 swaps per wallet per minute. To circumvent this, there is also the option to use the `eth_privkeys` array. Here you can add any number of private keys. Each should be loaded up with adequate funds for market making. The founds will be handled separately, therefor each additional wallet has the opportunity to process (at least) 12 more swaps per minute.
-
 To run the marketmaker:
 
 ```bash
@@ -206,69 +204,6 @@ Example:
 }
 ```
 
-
-## Pair Options
-
-These pair options can be set for each pair individual. You can even use more then on option per pair (though they might cancel each other out).
-
-###### delayAfterFill
-The market maker will stop market making on the pair, after successfully filling an order. This can be used to wait out bigger price moves. 
-With the second parameter, you can set the minimum trade size (**in base quantity**) to activate the option. This parameter is optional and can be omitted (like: `[60]`)
-
-Example, here a delay of **60 seconds** is used:
-```
-"ETH-USDC": {
-    "mode": "pricefeed",
-    "side": "b",
-    "priceFeedPrimary": "cryptowatch:6631",
-    "priceFeedSecondary": "cryptowatch:588",
-    "slippageRate": 1e-5,
-    "maxSize": 100,
-    "minSize": 0.0003,
-    "minSpread": 0.0005,
-    "active": true,
-    "delayAfterFill": [60, 0.5]        <- This would pause the pair for 60 sec after a fill.
-}
-```
-
-###### increaseSpreadAfterFill
-The market maker increases the spread by the set amount. After the time (**in seconds**) the spread will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3). 
-With the third parameter, you can set the minimum trade size (**in base quantity**) to activate the option. This parameter is optional and can be omitted.
-Example:
-```
-"ETH-USDC": {
-    "mode": "pricefeed",
-    "side": "b",
-    "priceFeedPrimary": "cryptowatch:6631",
-    "priceFeedSecondary": "cryptowatch:588",
-    "slippageRate": 1e-5,
-    "maxSize": 100,
-    "minSize": 0.0003,
-    "minSpread": 0.0005,
-    "active": true,
-    "increaseSpreadAfterFill": [0.1, 300, 0.5]        <- This would increase the minSpread by 0.1 per fill for 300 sec each.
-}
-```
-
-###### changeSizeAfterFill
-The market maker increases the size (**in base token**) by the set amount. After the time (**in seconds**) the size will fall back to the old value. This can happen multiple times in case the mm fills again in the set time (e.g. 0.1 -> 0.2 -> 0.3). You can set a value below 0 to reduce size after fill (like: [-0.1, 300]). 
-With the third parameter, you can set the minimum trade size (**in base quantity**) to activate the option. This parameter is optional and can be omitted.
-Example:
-```
-"ETH-USDC": {
-    "mode": "pricefeed",
-    "side": "b",
-    "priceFeedPrimary": "cryptowatch:6631",
-    "priceFeedSecondary": "cryptowatch:588",
-    "slippageRate": 1e-5,
-    "maxSize": 100,
-    "minSize": 0.0003,
-    "minSpread": 0.0005,
-    "active": true,
-    "changeSizeAfterFill": [0.05, 300, 0.5]        <- This would increase the maxSize by 0.05 ETH (base token) per fill for 300 sec each.
-}
-```
-
 ###### numOrdersIndicated
 On the UI, when indicating liquidity, by default will indicate the liquidity in 10 separate orders spaced evenly apart. To change the number of orders indicated, you can use the `numOrdersIndicated` setting.
 
@@ -285,50 +220,5 @@ Example:
     "minSpread": 0.0005,
     "active": true,
     "numOrdersIndicated": 5
-}
-```
-
-## Pair Setting Examples
-
-Stable-Stable constant price:
-
-```
-"DAI-USDC": {
-    "priceFeedPrimary": "constant:1",
-    "slippageRate": 1e-9,
-    "maxSize": 100000,
-    "minSize": 1,
-    "minSpread": 0.0003,
-    "active": true
-}
-```
-
-Single-sided accumulation:
-
-```
-"ETH-USDC": {
-    "mode": "pricefeed",
-    "side": "b",
-    "priceFeedPrimary": "cryptowatch:6631",
-    "priceFeedSecondary": "cryptowatch:588",
-    "slippageRate": 1e-5,
-    "maxSize": 100,
-    "minSize": 0.0003,
-    "minSpread": 0.0005,
-    "active": true
-}
-```
-
-Sell the rip:
-
-```
-"DYDX-USDC": {
-    "priceFeedPrimary": "constant:20",
-    "side": "s",
-    "slippageRate": 1e-5,
-    "maxSize": 1000,
-    "minSize": 0.5,
-    "minSpread": 0,
-    "active": true
 }
 ```
