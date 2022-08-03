@@ -15,6 +15,7 @@ const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
 const FEE_TOKEN_LIST = [];
+const OPEN_ORDERS = {};
 let FEE_TOKEN = null;
 
 let uniswap_error_counter = 0;
@@ -104,6 +105,11 @@ async function handleMessage(json) {
     switch(msg.op) {
         case 'error':
             console.log(msg)
+            break;
+        case "userorderack":
+            const order = msg.args;
+            const orderMarket = order[2];
+            OPEN_ORDERS[orderMarket].push(order);
             break;
         case "marketinfo":
             const marketInfo = msg.args[0];
@@ -218,6 +224,9 @@ async function setupPriceFeeds() {
                     break;
           }
       });
+
+      // instantiate open orders array for market
+      OPEN_ORDERS[market] = [];
   }
   if(chainlink.length > 0) await chainlinkSetup(chainlink);
   if(cryptowatch.length > 0) await cryptowatchWsSetup(cryptowatch);
@@ -387,6 +396,12 @@ function sendOrders (pairs = MM_CONFIG.pairs) {
     for(const marketId in pairs) {
         const mmConfig = pairs[marketId];
         if(!mmConfig || !mmConfig.active) continue;
+
+        // Cancel all active orders first
+        OPEN_ORDERS[marketId].forEach(order => {
+            cancelorder(order);
+        });
+        OPEN_ORDERS[marketId] = [];
 
         try {
             validatePriceFeed(marketId);
@@ -560,6 +575,13 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
     Order.signature = signature;
 
     zigzagws.send(JSON.stringify({ op: "submitorder3", args: [CHAIN_ID, marketId, Order] }));
+}
+
+async function cancelorder(order) {
+    const orderid = order[1];
+    const message = `cancelorder2:${CHAIN_ID}:${orderid}`;
+    const signature = await WALLET.signMessage(message);
+    zigzagws.send(JSON.stringify({ op: "cancelorder2", args: [CHAIN_ID, orderid, signature] }));
 }
 
 function getExchangeAddress() {
