@@ -509,6 +509,9 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
       balanceBN = BALANCES[quoteToken].value;
     }
 
+    // add margin of error to gas fee
+    gasFeeBN = gasFeeBN.mul(100).div(99)
+
     const makerVolumeFeeBN = quoteAmountBN
       .div(10000)
       .mul(marketInfo.makerVolumeFee * 100);
@@ -645,6 +648,7 @@ async function getBalanceOfCurrency(token, contractAddress) {
 
       if (!tokenInfo || !tokenInfo.address) return result;
 
+      console.log(token, tokenInfo.address, account);
       const contract = new ethers.Contract(
         tokenInfo.address,
         ERC20ABI,
