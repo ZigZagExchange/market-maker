@@ -45,7 +45,7 @@ console.log("ACTIVE PAIRS", activePairs);
 
 // Connect to zksync
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
-const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "rinkeby";
+const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "goerli";
 let ethersProvider;
 const providerUrl = (process.env.INFURA_URL || MM_CONFIG.infuraUrl);
 if(providerUrl && ETH_NETWORK=="mainnet") {
