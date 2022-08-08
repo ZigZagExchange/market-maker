@@ -486,22 +486,22 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
     );
 
     const [baseToken, quoteToken] = marketId.split('-');
-    let makerToken, takerToken, makerAmountBN, takerAmountBN, gasFeeBN, balanceBN;
+    let sellToken, buyToken, sellAmountBN, buyAmountBN, gasFeeBN, balanceBN;
     if (side === "s") {
-      makerToken = marketInfo.baseAsset.address;
-      takerToken = marketInfo.quoteAsset.address;
-      makerAmountBN = baseAmountBN;
-      takerAmountBN = quoteAmountBN.mul(99999).div(100000);
+      sellToken = marketInfo.baseAsset.address;
+      buyToken = marketInfo.quoteAsset.address;
+      sellAmountBN = baseAmountBN;
+      buyAmountBN = quoteAmountBN.mul(99999).div(100000);
       gasFeeBN = ethers.utils.parseUnits(
         Number(marketInfo.baseFee).toFixed(marketInfo.baseAsset.decimals),
         marketInfo.baseAsset.decimals
       );
       balanceBN = BALANCES[baseToken].value;
     } else {
-      makerToken = marketInfo.quoteAsset.address;
-      takerToken = marketInfo.baseAsset.address;
-      makerAmountBN = quoteAmountBN;
-      takerAmountBN = baseAmountBN.mul(99999).div(100000);
+      sellToken = marketInfo.quoteAsset.address;
+      buyToken = marketInfo.baseAsset.address;
+      sellAmountBN = quoteAmountBN;
+      buyAmountBN = baseAmountBN.mul(99999).div(100000);
       gasFeeBN = ethers.utils.parseUnits(
         Number(marketInfo.quoteFee).toFixed(marketInfo.quoteAsset.decimals),
         marketInfo.quoteAsset.decimals
@@ -525,7 +525,7 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
     } else {
       balanceBN = balanceBN.sub(gasFeeBN).sub(takerVolumeFeeBN);
     }
-    const delta = makerAmountBN.mul("1000").div(balanceBN).toNumber();
+    const delta = sellAmountBN.mul("1000").div(balanceBN).toNumber();
     if (delta > 1001) {
       // 100.1 %
       throw new Error(`Amount exceeds balance.`);
@@ -533,19 +533,19 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
     // prevent dust issues
     if (delta > 999) {
       // 99.9 %
-      makerAmountBN = balanceBN;
+      sellAmountBN = balanceBN;
     }
 
-    const account = await WALLET.getAddress();
+    const userAccount = await WALLET.getAddress();
     let domain, Order, types
     if (marketInfo.contractVersion === 4) {
         Order = {
-            makerAddress: account,
-            makerToken: makerToken,
-            takerToken: takerToken,
+            makerAddress: userAccount,
+            makerToken: sellToken,
+            takerToken: buyToken,
             feeRecipientAddress: marketInfo.feeAddress,
-            makerAssetAmount: makerAmountBN.toString(),
-            takerAssetAmount: takerAmountBN.toString(),
+            makerAssetAmount: sellAmountBN.toString(),
+            takerAssetAmount: buyAmountBN.toString(),
             makerVolumeFee: makerVolumeFeeBN.toString(),
             takerVolumeFee: takerVolumeFeeBN.toString(),
             gasFee: gasFeeBN.toString(),
@@ -575,20 +575,20 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
             ],
         };
     } else if (marketInfo.contractVersion === 5) {
-            Order = {
-            makerAddress: account,
-            makerToken: makerToken,
-            takerToken: takerToken,
+        Order = {
+            user: userAccount,
+            sellToken: sellToken,
+            buyToken: buyToken,
             feeRecipientAddress: marketInfo.feeAddress,
             relayerAddress: marketInfo.relayerAddress,
-            makerAssetAmount: makerAmountBN.toString(),
-            takerAssetAmount: takerAmountBN.toString(),
+            sellAmount: sellAmountBN.toString(),
+            buyAmount: buyAmountBN.toString(),
             makerVolumeFee: makerVolumeFeeBN.toString(),
             takerVolumeFee: takerVolumeFeeBN.toString(),
             gasFee: gasFeeBN.toString(),
             expirationTimeSeconds: expirationTimeSeconds.toFixed(0),
             salt: (Math.random() * 123456789).toFixed(0),
-            };
+        };
     
         domain = {
             name: "ZigZag",
@@ -598,13 +598,13 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
     
         types = {
             Order: [
-            { name: "makerAddress", type: "address" },
-            { name: "makerToken", type: "address" },
-            { name: "takerToken", type: "address" },
+            { name: "user", type: "address" },
+            { name: "sellToken", type: "address" },
+            { name: "buyToken", type: "address" },
             { name: "feeRecipientAddress", type: "address" },
             { name: "relayerAddress", type: "address" },
-            { name: "makerAssetAmount", type: "uint256" },
-            { name: "takerAssetAmount", type: "uint256" },
+            { name: "sellAmount", type: "uint256" },
+            { name: "buyAmount", type: "uint256" },
             { name: "makerVolumeFee", type: "uint256" },
             { name: "takerVolumeFee", type: "uint256" },
             { name: "gasFee", type: "uint256" },
