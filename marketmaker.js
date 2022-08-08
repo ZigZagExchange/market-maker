@@ -400,7 +400,7 @@ async function sendFillRequest(orderreceipt, accountId) {
       ratio: zksync.utils.tokenRatio(tokenRatio),
       validUntil: oneMinExpiry
   }
-  const fillOrder = await WALLETS[accountId].syncWallet.getOrder(orderDetails);
+  const fillOrder = await WALLETS[accountId].syncWallet.signOrder(orderDetails);
 
   // Set wallet flag
   WALLETS[accountId]['ORDER_BROADCASTING'] = true;
