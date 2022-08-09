@@ -538,43 +538,7 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
 
     const userAccount = await WALLET.getAddress();
     let domain, Order, types
-    if (marketInfo.contractVersion === 4) {
-        Order = {
-            makerAddress: userAccount,
-            makerToken: sellToken,
-            takerToken: buyToken,
-            feeRecipientAddress: marketInfo.feeAddress,
-            makerAssetAmount: sellAmountBN.toString(),
-            takerAssetAmount: buyAmountBN.toString(),
-            makerVolumeFee: makerVolumeFeeBN.toString(),
-            takerVolumeFee: takerVolumeFeeBN.toString(),
-            gasFee: gasFeeBN.toString(),
-            expirationTimeSeconds: expirationTimeSeconds.toFixed(0),
-            salt: (Math.random() * 123456789).toFixed(0),
-        };
-  
-        domain = {
-            name: "ZigZag",
-            version: "4",
-            chainId: CHAIN_ID,
-        };
-    
-        types = {
-            Order: [
-            { name: "makerAddress", type: "address" },
-            { name: "makerToken", type: "address" },
-            { name: "takerToken", type: "address" },
-            { name: "feeRecipientAddress", type: "address" },
-            { name: "makerAssetAmount", type: "uint256" },
-            { name: "takerAssetAmount", type: "uint256" },
-            { name: "makerVolumeFee", type: "uint256" },
-            { name: "takerVolumeFee", type: "uint256" },
-            { name: "gasFee", type: "uint256" },
-            { name: "expirationTimeSeconds", type: "uint256" },
-            { name: "salt", type: "uint256" },
-            ],
-        };
-    } else if (marketInfo.contractVersion === 5) {
+    if (Number(marketInfo.contractVersion) === 5) {
         Order = {
             user: userAccount,
             sellToken: sellToken,
