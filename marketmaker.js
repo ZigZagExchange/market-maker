@@ -392,7 +392,7 @@ async function uniswapV3Update() {
     }
 }
 
-function sendOrders (pairs = MM_CONFIG.pairs) {
+async function sendOrders (pairs = MM_CONFIG.pairs) {
     for(const marketId in pairs) {
         const mmConfig = pairs[marketId];
         if(!mmConfig || !mmConfig.active) continue;
@@ -402,6 +402,9 @@ function sendOrders (pairs = MM_CONFIG.pairs) {
             cancelorder(order);
         });
         OPEN_ORDERS[marketId] = [];
+
+        // wait 100ms for orders to cancel
+        await new Promise(r => setTimeout(r, 100));
 
         try {
             validatePriceFeed(marketId);
