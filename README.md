@@ -1,6 +1,6 @@
 # Zigzag Market Maker
 
-This is the reference market maker for Zigzag zksync markets. It works on both Rinkeby and Mainnet.
+This is the reference market maker for Zigzag zksync markets. It works on both Goerli and Mainnet.
 
 This market maker uses existing price feeds to set bids and asks for a market. For now, in order to provide liquidity for a market, there must be an existing market with **greater** liquidity listed on Cryptowatch, via either Uniswap or some other centralized exchange. It is crucial that the oracle market have more liquidity than the Zigzag one so that you are not prone to oracle attacks.
 
@@ -77,9 +77,9 @@ With the defualt setting the bot will pay the zkSync fee wiht the same token as 
 - "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com"
 - "zigzagChainId": 1
 
-#### Rinkeby zkSync
+#### Goerli zkSync
 - "zigzagWsUrl": "wss://secret-thicket-93345.herokuapp.com"
-- "zigzagChainId": 1000
+- "zigzagChainId": 1002
 
 You can add, remove, and configure pair settings in the `pairs` section. A pair setting looks like this:
 
