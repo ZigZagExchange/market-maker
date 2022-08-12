@@ -6,8 +6,6 @@ import fs from 'fs';
 
 dotenv.config();
 
-const CHAIN_ID = 42161;
-
 // Globals
 const PRICE_FEEDS = {};
 const BALANCES = {};
@@ -43,6 +41,7 @@ for (let marketId in MM_CONFIG.pairs) {
     }
 }
 console.log("ACTIVE PAIRS", activePairs);
+const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 
 const infuraID = MM_CONFIG.infura
     ? MM_CONFIG.infura
@@ -52,9 +51,17 @@ const ethersProvider = new ethers.providers.InfuraProvider(
     "mainnet",
     infuraID
 );
-const rollupProvider = new ethers.providers.JsonRpcProvider(
+
+let rollupProvider = null;
+if (CHAIN_ID === 42161) {
+  rollupProvider = new ethers.providers.JsonRpcProvider(
     "https://arb1.arbitrum.io/rpc"
-);
+  );
+} else if (CHAIN_ID === 421613) {
+  rollupProvider = new ethers.providers.JsonRpcProvider(
+    "https://goerli-rollup.arbitrum.io/rpc"
+  );  
+}
 
 const pKey = MM_CONFIG.ethPrivKey
     ? MM_CONFIG.ethPrivKey
@@ -511,9 +518,6 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
       );
       balanceBN = BALANCES[quoteToken].value;
     }
-
-    // add margin of error to gas fee
-    gasFeeBN = gasFeeBN.mul(100).div(99)
 
     const makerVolumeFeeBN = quoteAmountBN
       .div(10000)
