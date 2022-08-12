@@ -46,12 +46,15 @@ console.log("ACTIVE PAIRS", activePairs);
 // Connect to zksync
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "goerli";
-let ethersProvider;
-const providerUrl = (process.env.INFURA_URL || MM_CONFIG.infuraUrl);
-if(providerUrl && ETH_NETWORK=="mainnet") {
-    ethersProvider = ethers.getDefaultProvider(providerUrl);
+const infureKey = (process.env.infura || MM_CONFIG.infura);
+let ethersProvider = null;
+if (infureKey) {
+  ethersProvider = new ethers.providers.InfuraProvider(
+    "mainnet",
+    infureKey
+  );
 } else {
-    ethersProvider = ethers.getDefaultProvider(ETH_NETWORK);
+  ethersProvider = new ethers.getDefaultProvider("mainnet");
 }
 
 // Start price feeds

@@ -44,7 +44,7 @@ node marketmaker.js
 
 ## Configuration Via Environment Variables
 
-It is __recommended__ to use environment variables to set your private keys. You can set `ETH_PRIVKEY`, `CRYPTOWATCH_API_KEY` and `INFURA_URL` using them. You can set them using `ETH_PRIVKEY=0x____`. For more informations on private keys read [this](https://linuxize.com/post/how-to-set-and-list-environment-variables-in-linux/).
+It is __recommended__ to use environment variables to set your private keys. You can set `ETH_PRIVKEY`, `CRYPTOWATCH_API_KEY` and `INFURA` using them. You can set them using `ETH_PRIVKEY=0x____`. For more informations on private keys read [this](https://linuxize.com/post/how-to-set-and-list-environment-variables-in-linux/).
 
 If your hosting service requires you to pass in configs via environment variables you can compress `config.json`:
 
