@@ -86,7 +86,7 @@ zigzagws.on('error', console.error);
 
 function onWsOpen() {
     zigzagws.on('message', handleMessage);
-    sendOrdersInterval = setInterval(sendOrders, 14000);
+    sendOrdersInterval = setInterval(sendOrders, 7000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
