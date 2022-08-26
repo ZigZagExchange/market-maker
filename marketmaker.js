@@ -204,8 +204,8 @@ async function handleMessage(json) {
                 FEE_TOKEN_LIST.push(marketInfo.baseAsset.id);
               }
             } else {
-              if (FEE_TOKEN_LIST.includes(marketInfo.baseAsset.id)) {
-                const index = FEE_TOKEN_LIST.indexOf(marketInfo.baseAsset.id);
+              const index = FEE_TOKEN_LIST.indexOf(marketInfo.baseAsset.id);
+              if (index >= 0) {
                 FEE_TOKEN_LIST.splice(index, 1);
               }
             }
@@ -214,8 +214,8 @@ async function handleMessage(json) {
                 FEE_TOKEN_LIST.push(marketInfo.quoteAsset.id);
               }  
             } else {
-              if (FEE_TOKEN_LIST.includes(marketInfo.quoteAsset.id)) {
-                const index = FEE_TOKEN_LIST.indexOf(marketInfo.quoteAsset.id);
+              const index = FEE_TOKEN_LIST.indexOf(marketInfo.quoteAsset.id);
+              if (index >= 0) {
                 FEE_TOKEN_LIST.splice(index, 1);
               }
             }
