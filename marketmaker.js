@@ -199,18 +199,26 @@ async function handleMessage(json) {
             const newQuoteFee = MARKETS[marketId].quoteFee;
             console.log(`marketinfo ${marketId} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`);
             if (FEE_TOKEN) break
-            if(
-              marketInfo.baseAsset.enabledForFees &&
-              !FEE_TOKEN_LIST.includes(marketInfo.baseAsset.id)
-            ) {
-              FEE_TOKEN_LIST.push(marketInfo.baseAsset.id);
-            } 
-            if(
-              marketInfo.quoteAsset.enabledForFees &&
-              !FEE_TOKEN_LIST.includes(marketInfo.quoteAsset.id)
-            ) {
-              FEE_TOKEN_LIST.push(marketInfo.quoteAsset.id);
-            } 
+            if(marketInfo.baseAsset.enabledForFees) {
+              if (!FEE_TOKEN_LIST.includes(marketInfo.baseAsset.id)) {
+                FEE_TOKEN_LIST.push(marketInfo.baseAsset.id);
+              }
+            } else {
+              if (FEE_TOKEN_LIST.includes(marketInfo.baseAsset.id)) {
+                const index = FEE_TOKEN_LIST.indexOf(marketInfo.baseAsset.id);
+                FEE_TOKEN_LIST.splice(index, 1);
+              }
+            }
+            if(marketInfo.quoteAsset.enabledForFees) {
+              if (!FEE_TOKEN_LIST.includes(marketInfo.quoteAsset.id)) {
+                FEE_TOKEN_LIST.push(marketInfo.quoteAsset.id);
+              }  
+            } else {
+              if (FEE_TOKEN_LIST.includes(marketInfo.quoteAsset.id)) {
+                const index = FEE_TOKEN_LIST.indexOf(marketInfo.quoteAsset.id);
+                FEE_TOKEN_LIST.splice(index, 1);
+              }
+            }
             break
         default:
             break
