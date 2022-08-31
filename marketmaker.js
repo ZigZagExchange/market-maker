@@ -520,7 +520,7 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
     }
 
     const makerVolumeFeeBN = sellAmountBN
-      .mul(marketInfo.makerVolumeFee * 10000);
+      .mul(marketInfo.makerVolumeFee * 10000)
       .div(9999)
     const takerVolumeFeeBN = sellAmountBN
       .mul(marketInfo.takerVolumeFee * 10000)
