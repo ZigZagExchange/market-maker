@@ -521,10 +521,10 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
 
     const makerVolumeFeeBN = quoteAmountBN
       .div(10000)
-      .mul(marketInfo.makerVolumeFee * 100);
-    const takerVolumeFeeBN = baseAmountBN
-      .div(10000)
-      .mul(marketInfo.takerVolumeFee * 100);
+      .mul(marketInfo.makerVolumeFee * 10000);
+    const takerVolumeFeeBN = sellAmountBN
+      .mul(marketInfo.takerVolumeFee * 10000)
+      .div(9999)
 
     // size check
     if (makerVolumeFeeBN.gte(takerVolumeFeeBN)) {
@@ -560,6 +560,7 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
             expirationTimeSeconds: expirationTimeSeconds.toFixed(0),
             salt: (Math.random() * 123456789).toFixed(0),
         };
+      console.log(Order);
     
         domain = {
             name: "ZigZag",
