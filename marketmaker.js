@@ -519,9 +519,9 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
       balanceBN = BALANCES[quoteToken].value;
     }
 
-    const makerVolumeFeeBN = quoteAmountBN
-      .div(10000)
+    const makerVolumeFeeBN = sellAmountBN
       .mul(marketInfo.makerVolumeFee * 10000);
+      .div(9999)
     const takerVolumeFeeBN = sellAmountBN
       .mul(marketInfo.takerVolumeFee * 10000)
       .div(9999)
