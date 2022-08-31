@@ -485,7 +485,7 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
         baseAmount < marketInfo.baseFee ||
         quoteAmount < marketInfo.quoteFee
     ) return
-
+    
     const baseAmountBN = ethers.utils.parseUnits(
         Number(baseAmount).toFixed(marketInfo.baseAsset.decimals),
         marketInfo.baseAsset.decimals
@@ -494,6 +494,8 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
         Number(quoteAmount).toFixed(marketInfo.quoteAsset.decimals),
         marketInfo.quoteAsset.decimals
     );
+    console.log(baseAmount, baseAmountBN.toString());
+    console.log(quoteAmount, quoteAmountBN.toString());
 
     const [baseToken, quoteToken] = marketId.split('-');
     let sellToken, buyToken, sellAmountBN, buyAmountBN, gasFeeBN, balanceBN;
@@ -501,7 +503,7 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
       sellToken = marketInfo.baseAsset.address;
       buyToken = marketInfo.quoteAsset.address;
       sellAmountBN = baseAmountBN;
-      buyAmountBN = quoteAmountBN.mul(99999).div(100000);
+      buyAmountBN = quoteAmountBN;
       gasFeeBN = ethers.utils.parseUnits(
         Number(marketInfo.baseFee).toFixed(marketInfo.baseAsset.decimals),
         marketInfo.baseAsset.decimals
@@ -511,7 +513,7 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
       sellToken = marketInfo.quoteAsset.address;
       buyToken = marketInfo.baseAsset.address;
       sellAmountBN = quoteAmountBN;
-      buyAmountBN = baseAmountBN.mul(99999).div(100000);
+      buyAmountBN = baseAmountBN;
       gasFeeBN = ethers.utils.parseUnits(
         Number(marketInfo.quoteFee).toFixed(marketInfo.quoteAsset.decimals),
         marketInfo.quoteAsset.decimals
@@ -532,15 +534,17 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
     } else {
       balanceBN = balanceBN.sub(gasFeeBN).sub(takerVolumeFeeBN);
     }
-    const delta = sellAmountBN.mul("1000").div(balanceBN).toNumber();
-    if (delta > 1001) {
+    const delta = sellAmountBN.mul("100000").div(balanceBN).toNumber();
+    console.log(delta);
+    if (delta > 100100) {
       // 100.1 %
       throw new Error(`Amount exceeds balance.`);
     }
     // prevent dust issues
-    if (delta > 999) {
+    if (delta > 99990) {
       // 99.9 %
       sellAmountBN = balanceBN;
+      buyAmountBN = buyAmountBN.mul(100000).div(delta);
     }
 
     const userAccount = await WALLET.getAddress();
@@ -560,7 +564,6 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
             expirationTimeSeconds: expirationTimeSeconds.toFixed(0),
             salt: (Math.random() * 123456789).toFixed(0),
         };
-      console.log(Order);
     
         domain = {
             name: "ZigZag",
