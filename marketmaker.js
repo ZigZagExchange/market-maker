@@ -494,8 +494,6 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
         Number(quoteAmount).toFixed(marketInfo.quoteAsset.decimals),
         marketInfo.quoteAsset.decimals
     );
-    console.log(baseAmount, baseAmountBN.toString());
-    console.log(quoteAmount, quoteAmountBN.toString());
 
     const [baseToken, quoteToken] = marketId.split('-');
     let sellToken, buyToken, sellAmountBN, buyAmountBN, gasFeeBN, balanceBN;
@@ -535,7 +533,6 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
       balanceBN = balanceBN.sub(gasFeeBN).sub(takerVolumeFeeBN);
     }
     const delta = sellAmountBN.mul("100000").div(balanceBN).toNumber();
-    console.log(delta);
     if (delta > 100100) {
       // 100.1 %
       throw new Error(`Amount exceeds balance.`);
@@ -549,7 +546,7 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
 
     const userAccount = await WALLET.getAddress();
     let domain, Order, types
-    if (Number(marketInfo.contractVersion) === 5) {
+    if (Number(marketInfo.contractVersion) === 6) {
         Order = {
             user: userAccount,
             sellToken: sellToken,
@@ -664,7 +661,6 @@ async function getBalanceOfCurrency(token, contractAddress) {
 
       if (!tokenInfo || !tokenInfo.address) return result;
 
-      console.log(token, tokenInfo.address, account);
       const contract = new ethers.Contract(
         tokenInfo.address,
         ERC20ABI,
