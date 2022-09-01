@@ -567,7 +567,7 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
     
         domain = {
             name: "ZigZag",
-            version: "5",
+            version: "6",
             chainId: CHAIN_ID,
         };
     
