@@ -76,7 +76,7 @@ await setupPriceFeeds();
 
 // Update account state loop
 setTimeout(getBalances, 5000);
-setInterval(getBalances, 300000);
+setInterval(getBalances, 15000);
 
 let sendOrdersInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
