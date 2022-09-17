@@ -1,9 +1,6 @@
 {
     "cryptowatchApiKey": "aaaaxxx",
-    "ethPrivKeys": [
-        "",
-        ""
-    ],
+    "ethPrivKey": "0x000f...f4",
     "zigzagChainId": 1,
     "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
     "pairs": {
