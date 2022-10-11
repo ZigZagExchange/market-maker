@@ -404,15 +404,6 @@ async function sendOrders (pairs = MM_CONFIG.pairs) {
         const mmConfig = pairs[marketId];
         if(!mmConfig || !mmConfig.active) continue;
 
-        // Cancel all active orders first
-        OPEN_ORDERS[marketId].forEach(order => {
-            cancelorder(order);
-        });
-        OPEN_ORDERS[marketId] = [];
-
-        // wait 100ms for orders to cancel
-        await new Promise(r => setTimeout(r, 100));
-
         try {
             validatePriceFeed(marketId);
         } catch(e) {
@@ -447,34 +438,44 @@ async function sendOrders (pairs = MM_CONFIG.pairs) {
         if (usdQuoteBalance && usdQuoteBalance < (10 * buySplits)) buySplits = Math.floor(usdQuoteBalance / 10)
         if (usdBaseBalance && usdBaseBalance < (10 * sellSplits)) sellSplits = Math.floor(usdBaseBalance / 10)
         
+        const orderArray = [];
         for (let i=1; i <= buySplits; i++) {
             const buyPrice = midPrice * (1 - mmConfig.minSpread - (mmConfig.slippageRate * maxBuySize * i/buySplits));
             if ((['b','d']).includes(side)) {
-                submitOrder(
+              orderArray.push(await getOrderCalldata(
                     marketId,
                     "b",
                     buyPrice,
                     (maxBuySize / buySplits) - marketInfo.baseFee,
                     expires
-                );
+                ));
             }
         }
         for (let i=1; i <= sellSplits; i++) {
             const sellPrice = midPrice * (1 + mmConfig.minSpread + (mmConfig.slippageRate * maxSellSize * i/sellSplits));
             if ((['s','d']).includes(side)) {
-                submitOrder(
+              orderArray.push(await getOrderCalldata(
                     marketId,
                     "s",
                     sellPrice,
                     (maxSellSize / sellSplits) - marketInfo.baseFee,
                     expires
-                );
+                ));
             }
-        }    
+        }
+
+        // sign all orders to be canceled
+        const cancelOrderArray = []
+        const results = OPEN_ORDERS[marketId].map(async (order) => {
+          cancelOrderArray.push(await getCancelOrderEntry(order));
+        });
+        await Promise.all(results);
+        
+        zigzagws.send(JSON.stringify({ op: "submitorder4", args: [CHAIN_ID, marketId, orderArray, cancelOrderArray] }));
     }
 }
 
-async function submitOrder (marketId, side, price, size, expirationTimeSeconds) {
+async function getOrderCalldata (marketId, side, price, size, expirationTimeSeconds) {
     console.log(`Side: ${side}, price ${price}, size: ${size}`);
     const marketInfo = MARKETS[marketId];
     if (!marketInfo) return null;
@@ -590,14 +591,14 @@ async function submitOrder (marketId, side, price, size, expirationTimeSeconds) 
 
     Order.signature = signature;
 
-    zigzagws.send(JSON.stringify({ op: "submitorder3", args: [CHAIN_ID, marketId, Order] }));
+    return Order;
 }
 
-async function cancelorder(order) {
+async function getCancelOrderEntry(order) {
     const orderid = order[1];
     const message = `cancelorder2:${CHAIN_ID}:${orderid}`;
     const signature = await WALLET.signMessage(message);
-    zigzagws.send(JSON.stringify({ op: "cancelorder2", args: [CHAIN_ID, orderid, signature] }));
+    return [orderid, signature];
 }
 
 function getExchangeAddress() {
