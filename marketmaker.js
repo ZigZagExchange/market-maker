@@ -13,7 +13,7 @@ const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
 const FEE_TOKEN_LIST = [];
-const OPEN_ORDERS = {};
+const MY_ORDERS = {};
 let FEE_TOKEN = null;
 
 let uniswap_error_counter = 0;
@@ -117,7 +117,7 @@ async function handleMessage(json) {
     case "userorderack":
       const order = msg.args;
       const orderMarket = order[2];
-      OPEN_ORDERS[orderMarket].push(order);
+      MY_ORDERS[orderMarket].push(order);
       break;
     case "marketinfo":
       const marketInfo = msg.args[0];
@@ -251,7 +251,7 @@ async function setupPriceFeeds() {
     });
 
     // instantiate open orders array for market
-    OPEN_ORDERS[market] = [];
+    MY_ORDERS[market] = [];
   }
   if (chainlink.length > 0) await chainlinkSetup(chainlink);
   if (cryptowatch.length > 0) await cryptowatchWsSetup(cryptowatch);
@@ -539,10 +539,13 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
 
     // sign all orders to be canceled
     const cancelOrderArray = []
-    const result = OPEN_ORDERS[marketId].map(async (order) => {
+    const result = MY_ORDERS[marketId].map(async (order) => {
       cancelOrderArray.push(await getCancelOrderEntry(order));
     });
     await Promise.all(result);
+
+    // clear all orders, they either failed to cancel or got canceld
+    MY_ORDERS[marketId] = [];
 
     zigzagws.send(
       JSON.stringify({
