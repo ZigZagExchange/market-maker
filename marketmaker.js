@@ -538,10 +538,11 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
     }
 
     // sign all orders to be canceled
-    const cancelOrderArray = OPEN_ORDERS[marketId].map(async (order) => {
-      return await getCancelOrderEntry(order);
+    const cancelOrderArray = []
+    const result = OPEN_ORDERS[marketId].map(async (order) => {
+      cancelOrderArray.push(await getCancelOrderEntry(order));
     });
-    await Promise.all(cancelOrderArray);
+    await Promise.all(result);
 
     zigzagws.send(
       JSON.stringify({
