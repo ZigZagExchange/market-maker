@@ -582,7 +582,7 @@ async function getOrderCalldata(
   );
 
   const [baseToken, quoteToken] = marketId.split("-");
-  let sellToken, buyToken, sellAmountBN, buyAmountBN, gasFeeBN, balanceBN;
+  let sellToken, buyToken, sellAmountBN, buyAmountBN, balanceBN;
   if (side === "s") {
     sellToken = marketInfo.baseAsset.address;
     buyToken = marketInfo.quoteAsset.address;
@@ -607,6 +607,7 @@ async function getOrderCalldata(
   const userAccount = await WALLET.getAddress();
   let domain, Order, types;
   if (Number(marketInfo.contractVersion) === 6) {
+    let gasFeeBN;
     if (side === "s") {
       gasFeeBN = ethers.utils.parseUnits(
         Number(marketInfo.baseFee).toFixed(marketInfo.baseAsset.decimals),
