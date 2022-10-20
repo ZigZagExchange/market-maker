@@ -597,6 +597,13 @@ async function getOrderCalldata(
     balanceBN = BALANCES[quoteToken].value;
   }
 
+  const makerVolumeFeeBN = sellAmountBN
+    .mul(marketInfo.makerVolumeFee * 10000)
+    .div(9999);
+  const takerVolumeFeeBN = sellAmountBN
+    .mul(marketInfo.takerVolumeFee * 10000)
+    .div(9999);
+
   const userAccount = await WALLET.getAddress();
   let domain, Order, types;
   if (Number(marketInfo.contractVersion) === 6) {
@@ -611,13 +618,6 @@ async function getOrderCalldata(
         marketInfo.quoteAsset.decimals
       );
     }
-
-    const makerVolumeFeeBN = sellAmountBN
-      .mul(marketInfo.makerVolumeFee * 10000)
-      .div(9999);
-    const takerVolumeFeeBN = sellAmountBN
-      .mul(marketInfo.takerVolumeFee * 10000)
-      .div(9999);
 
     // size check
     if (makerVolumeFeeBN.gte(takerVolumeFeeBN)) {
