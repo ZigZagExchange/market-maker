@@ -1,6 +1,6 @@
 # Zigzag Market Maker
 
-This is the reference market maker for Zigzag zksync markets. It works on both Rinkeby and Mainnet.
+This is the reference market maker for arbitrum markets. It works on both Goerli and Mainnet.
 
 This market maker uses existing price feeds to set bids and asks for a market. For now, in order to provide liquidity for a market, there must be an existing market with **greater** liquidity listed on Cryptowatch, via either Uniswap or some other centralized exchange. It is crucial that the oracle market have more liquidity than the Zigzag one so that you are not prone to oracle attacks.
 
@@ -20,19 +20,18 @@ Running the bot on a VPS has many advantages. But you need to make sure your sys
 
 ## Requirements
 
-* Activated zkSync account
 * Ethereum private key of that account
 * Funds in that account corresponding to the pairs you want to market make
 * [Cryptowatch API key](https://cryptowat.ch/account/api-access) (free for limited time)
 * [Node.js](https://nodejs.org/en/download/)
 * Node.js 16 works on macOS, Windows and Linux (17 seems not)
-* Optional: VPS when you have high ping running the bot
+* Optional: VPS when you dont want to run a home PC 24/7
 
 ## Setup
 
 Copy the `config.json.EXAMPLE` file to `config.json` to get started.
 
-Set your `eth_privkey` to be able to relay transactions. The ETH address with that private key should be loaded up with adequate funds for market making.
+Set your `ethPrivKey` to be able to relay transactions. The ETH address with that private key should be loaded up with adequate funds for market making.
 
 To run the marketmaker:
 
@@ -54,30 +53,13 @@ and set it to the value of the `MM_CONFIG` environment variable to override the 
 
 ## Settings
 
-#### Fee Token
-
-With the defualt setting the bot will pay the zkSync fee wiht the same token as the user (buy currency for the bot). You can chose to override that by a fixed fee token. Check if your tokens is available to pay fees on zkSync [here](https://zkscan.io/explorer/tokens).
-
-```
-{
-    "cryptowatchApiKey": "aaaaxxx",
-    "ethPrivKeys": [
-        "",
-        ""
-    ],    
-    "zigzagChainId": 1,
-    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
-    "feeToken": "ETH", <- add this line if you eg. want to pay the fees in Ethereum 
-    "pairs": {
-```
-
-#### Mainnet zkSync
+#### Mainnet arbitrum
 - "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com"
-- "zigzagChainId": 1
+- "zigzagChainId": 42161
 
-#### Rinkeby zkSync
+#### Goerli arbitrum
 - "zigzagWsUrl": "wss://secret-thicket-93345.herokuapp.com"
-- "zigzagChainId": 1000
+- "zigzagChainId": 421613
 
 You can add, remove, and configure pair settings in the `pairs` section. A pair setting looks like this:
 
@@ -113,7 +95,6 @@ There are 4 modes available with a 5th on the way.
 * `chainlink` : Follows an external price oracle. Chainlink is WEB3 and might be slower then cryptowatch.
 * `constant`: Sets an fixed price and market makes around that price. Can be combined with single-sided liquidity to simulate limit orders.
 * `uniswapV3`: Reads prices on-chain from a specified uniswapV3 pool
-* `independent`: Under development. The price is set independent of a price feed.
 
 **Warning:** Make sure your price feed is close to the price you see on zigzag. **Otherwise, your mm can lose money!**
 
