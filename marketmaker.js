@@ -107,6 +107,7 @@ async function handleMessage(json) {
       "liquidity2",
       "fillstatus",
       "marketinfo",
+      "error",
     ].includes(msg.op)
   )
     console.log(json.toString());
@@ -132,11 +133,6 @@ async function handleMessage(json) {
         // pass, no old marketInfo
       }
       MARKETS[marketId] = marketInfo;
-      const newBaseFee = MARKETS[marketId].baseFee;
-      const newQuoteFee = MARKETS[marketId].quoteFee;
-      console.log(
-        `marketinfo ${marketId} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`
-      );
 
       if (FEE_TOKEN) break;
       if (
