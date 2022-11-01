@@ -507,15 +507,14 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
           mmConfig.minSpread -
           (mmConfig.slippageRate * maxBuySize * i) / buySplits);
       if (["b", "d"].includes(side)) {
-        orderArray.push(
-          await getOrderCalldata(
-            marketId,
-            "b",
-            buyPrice,
-            maxBuySize / buySplits - marketInfo.baseFee,
-            expires
-          )
+        const order = await getOrderCalldata(
+          marketId,
+          "b",
+          buyPrice,
+          maxBuySize / buySplits - marketInfo.baseFee,
+          expires
         );
+        if (order) orderArray.push(order);  
       }
     }
     for (let i = 1; i <= sellSplits; i++) {
@@ -525,15 +524,14 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
           mmConfig.minSpread +
           (mmConfig.slippageRate * maxSellSize * i) / sellSplits);
       if (["s", "d"].includes(side)) {
-        orderArray.push(
-          await getOrderCalldata(
-            marketId,
-            "s",
-            sellPrice,
-            maxSellSize / sellSplits - marketInfo.baseFee,
-            expires
-          )
+        const order = await getOrderCalldata(
+          marketId,
+          "s",
+          sellPrice,
+          maxSellSize / sellSplits - marketInfo.baseFee,
+          expires
         );
+        if (order) orderArray.push(order);        
       }
     }
 
@@ -547,6 +545,8 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
     // clear all orders, they either failed to cancel or got canceld
     MY_ORDERS[marketId] = [];
 
+    if (orderArray.length === 0) return;
+    
     zigzagws.send(
       JSON.stringify({
         op: "submitorder4",
@@ -682,6 +682,9 @@ async function getOrderCalldata(
     } else {
       balanceBN = balanceBN.sub(takerVolumeFeeBN);
     }
+
+    if (balanceBN.lte(0)) return null;
+
     const delta = sellAmountBN.mul("100000").div(balanceBN).toNumber();
     if (delta > 100100) {
       // 100.1 %
@@ -798,7 +801,7 @@ async function getBalanceOfCurrency(token, contractAddress) {
       ERC20ABI,
       rollupProvider
     );
-    result.value = await contract.balanceOf(account);
+    result.value = await contract.balanceOf(account);    
     if (contractAddress) {
       result.allowance = await contract.allowance(account, contractAddress);
     } else {
