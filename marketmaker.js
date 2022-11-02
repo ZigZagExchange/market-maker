@@ -107,6 +107,7 @@ async function handleMessage(json) {
       "liquidity2",
       "fillstatus",
       "marketinfo",
+      "error",
     ].includes(msg.op)
   )
     console.log(json.toString());
@@ -132,11 +133,6 @@ async function handleMessage(json) {
         // pass, no old marketInfo
       }
       MARKETS[marketId] = marketInfo;
-      const newBaseFee = MARKETS[marketId].baseFee;
-      const newQuoteFee = MARKETS[marketId].quoteFee;
-      console.log(
-        `marketinfo ${marketId} - update baseFee ${oldBaseFee} -> ${newBaseFee}, quoteFee ${oldQuoteFee} -> ${newQuoteFee}`
-      );
 
       if (FEE_TOKEN) break;
       if (
@@ -507,15 +503,14 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
           mmConfig.minSpread -
           (mmConfig.slippageRate * maxBuySize * i) / buySplits);
       if (["b", "d"].includes(side)) {
-        orderArray.push(
-          await getOrderCalldata(
-            marketId,
-            "b",
-            buyPrice,
-            maxBuySize / buySplits - marketInfo.baseFee,
-            expires
-          )
+        const order = await getOrderCalldata(
+          marketId,
+          "b",
+          buyPrice,
+          maxBuySize / buySplits - marketInfo.baseFee,
+          expires
         );
+        if (order) orderArray.push(order);  
       }
     }
     for (let i = 1; i <= sellSplits; i++) {
@@ -525,20 +520,19 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
           mmConfig.minSpread +
           (mmConfig.slippageRate * maxSellSize * i) / sellSplits);
       if (["s", "d"].includes(side)) {
-        orderArray.push(
-          await getOrderCalldata(
-            marketId,
-            "s",
-            sellPrice,
-            maxSellSize / sellSplits - marketInfo.baseFee,
-            expires
-          )
+        const order = await getOrderCalldata(
+          marketId,
+          "s",
+          sellPrice,
+          maxSellSize / sellSplits - marketInfo.baseFee,
+          expires
         );
+        if (order) orderArray.push(order);        
       }
     }
 
     // sign all orders to be canceled
-    const cancelOrderArray = []
+    const cancelOrderArray = [];
     const result = MY_ORDERS[marketId].map(async (order) => {
       cancelOrderArray.push(await getCancelOrderEntry(order));
     });
@@ -547,6 +541,8 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
     // clear all orders, they either failed to cancel or got canceld
     MY_ORDERS[marketId] = [];
 
+    if (orderArray.length === 0) return;
+    
     zigzagws.send(
       JSON.stringify({
         op: "submitorder4",
@@ -582,26 +578,18 @@ async function getOrderCalldata(
   );
 
   const [baseToken, quoteToken] = marketId.split("-");
-  let sellToken, buyToken, sellAmountBN, buyAmountBN, gasFeeBN, balanceBN;
+  let sellToken, buyToken, sellAmountBN, buyAmountBN, balanceBN;
   if (side === "s") {
     sellToken = marketInfo.baseAsset.address;
     buyToken = marketInfo.quoteAsset.address;
     sellAmountBN = baseAmountBN;
     buyAmountBN = quoteAmountBN;
-    gasFeeBN = ethers.utils.parseUnits(
-      Number(marketInfo.baseFee).toFixed(marketInfo.baseAsset.decimals),
-      marketInfo.baseAsset.decimals
-    );
     balanceBN = BALANCES[baseToken].value;
   } else {
     sellToken = marketInfo.quoteAsset.address;
     buyToken = marketInfo.baseAsset.address;
     sellAmountBN = quoteAmountBN;
     buyAmountBN = baseAmountBN;
-    gasFeeBN = ethers.utils.parseUnits(
-      Number(marketInfo.quoteFee).toFixed(marketInfo.quoteAsset.decimals),
-      marketInfo.quoteAsset.decimals
-    );
     balanceBN = BALANCES[quoteToken].value;
   }
 
@@ -612,27 +600,40 @@ async function getOrderCalldata(
     .mul(marketInfo.takerVolumeFee * 10000)
     .div(9999);
 
-  // size check
-  if (makerVolumeFeeBN.gte(takerVolumeFeeBN)) {
-    balanceBN = balanceBN.sub(gasFeeBN).sub(makerVolumeFeeBN);
-  } else {
-    balanceBN = balanceBN.sub(gasFeeBN).sub(takerVolumeFeeBN);
-  }
-  const delta = sellAmountBN.mul("100000").div(balanceBN).toNumber();
-  if (delta > 100100) {
-    // 100.1 %
-    throw new Error(`Amount exceeds balance.`);
-  }
-  // prevent dust issues
-  if (delta > 99990) {
-    // 99.9 %
-    sellAmountBN = balanceBN;
-    buyAmountBN = buyAmountBN.mul(100000).div(delta);
-  }
-
   const userAccount = await WALLET.getAddress();
   let domain, Order, types;
   if (Number(marketInfo.contractVersion) === 6) {
+    let gasFeeBN;
+    if (side === "s") {
+      gasFeeBN = ethers.utils.parseUnits(
+        Number(marketInfo.baseFee).toFixed(marketInfo.baseAsset.decimals),
+        marketInfo.baseAsset.decimals
+      );
+    } else {
+      gasFeeBN = ethers.utils.parseUnits(
+        Number(marketInfo.quoteFee).toFixed(marketInfo.quoteAsset.decimals),
+        marketInfo.quoteAsset.decimals
+      );
+    }
+
+    // size check
+    if (makerVolumeFeeBN.gte(takerVolumeFeeBN)) {
+      balanceBN = balanceBN.sub(gasFeeBN).sub(makerVolumeFeeBN);
+    } else {
+      balanceBN = balanceBN.sub(gasFeeBN).sub(takerVolumeFeeBN);
+    }
+    const delta = sellAmountBN.mul("100000").div(balanceBN).toNumber();
+    if (delta > 100100) {
+      // 100.1 %
+      throw new Error(`Amount exceeds balance.`);
+    }
+    // prevent dust issues
+    if (delta > 99990) {
+      // 99.9 %
+      sellAmountBN = balanceBN;
+      buyAmountBN = buyAmountBN.mul(100000).div(delta);
+    }
+
     Order = {
       user: userAccount,
       sellToken: sellToken,
@@ -668,6 +669,53 @@ async function getOrderCalldata(
         { name: "gasFee", type: "uint256" },
         { name: "expirationTimeSeconds", type: "uint256" },
         { name: "salt", type: "uint256" },
+      ],
+    };
+  } else if (Number(marketInfo.contractVersion) == 2.0) {
+    // size check
+    if (makerVolumeFeeBN.gte(takerVolumeFeeBN)) {
+      balanceBN = balanceBN.sub(makerVolumeFeeBN);
+    } else {
+      balanceBN = balanceBN.sub(takerVolumeFeeBN);
+    }
+
+    if (balanceBN.lte(0)) return null;
+
+    const delta = sellAmountBN.mul("100000").div(balanceBN).toNumber();
+    if (delta > 100100) {
+      // 100.1 %
+      throw new Error(`Amount exceeds balance.`);
+    }
+    // prevent dust issues
+    if (delta > 99990) {
+      // 99.9 %
+      sellAmountBN = balanceBN;
+      buyAmountBN = buyAmountBN.mul(100000).div(delta);
+    }
+    Order = {
+      user: userAccount,
+      sellToken,
+      buyToken,
+      sellAmount: sellAmountBN.toString(),
+      buyAmount: buyAmountBN.toString(),
+      expirationTimeSeconds: expirationTimeSeconds.toFixed(0),
+    };
+
+    domain = {
+      name: "ZigZag",
+      version: "2.0",
+      chainId: CHAIN_ID,
+      verifyingContract: marketInfo.exchangeAddress,
+    };
+
+    types = {
+      Order: [
+        { name: "user", type: "address" },
+        { name: "sellToken", type: "address" },
+        { name: "buyToken", type: "address" },
+        { name: "sellAmount", type: "uint256" },
+        { name: "buyAmount", type: "uint256" },
+        { name: "expirationTimeSeconds", type: "uint256" },
       ],
     };
   }
@@ -723,10 +771,10 @@ function getCurrencyInfo(currency) {
 async function getBalances() {
   const contractAddress = getExchangeAddress();
   const tokens = getCurrencies();
-  const Promis = tokens.map(async (token) => {
+  for(let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
     BALANCES[token] = await getBalanceOfCurrency(token, contractAddress);
-  });
-  await Promise.all(Promis);
+  }
 }
 
 async function getBalanceOfCurrency(token, contractAddress) {
@@ -749,15 +797,18 @@ async function getBalanceOfCurrency(token, contractAddress) {
       ERC20ABI,
       rollupProvider
     );
-    result.value = await contract.balanceOf(account);
+    result.value = await contract.balanceOf(account);    
     if (contractAddress) {
       result.allowance = await contract.allowance(account, contractAddress);
+
+      if (result.value.gte(result.allowance)) {
+        console.log(`Sending approve for ${tokenInfo.address}`)
+        await contract.connect(WALLET).approve(contractAddress, ethers.constants.MaxUint256);
+      }
     } else {
       result.allowance = 0;
     }
-    if (result.value.gte(result.allowance)) {
-      result.value = result.allowance;
-    }
+    
     return result;
   } catch (e) {
     console.log(e);
