@@ -771,10 +771,10 @@ function getCurrencyInfo(currency) {
 async function getBalances() {
   const contractAddress = getExchangeAddress();
   const tokens = getCurrencies();
-  const Promis = tokens.map(async (token) => {
+  for(let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
     BALANCES[token] = await getBalanceOfCurrency(token, contractAddress);
-  });
-  await Promise.all(Promis);
+  }
 }
 
 async function getBalanceOfCurrency(token, contractAddress) {
@@ -800,12 +800,15 @@ async function getBalanceOfCurrency(token, contractAddress) {
     result.value = await contract.balanceOf(account);    
     if (contractAddress) {
       result.allowance = await contract.allowance(account, contractAddress);
+
+      if (result.value.gte(result.allowance)) {
+        console.log(`Sending approve for ${tokenInfo.address}`)
+        await contract.connect(WALLET).approve(contractAddress, ethers.constants.MaxUint256);
+      }
     } else {
       result.allowance = 0;
     }
-    if (result.value.gte(result.allowance)) {
-      result.value = result.allowance;
-    }
+    
     return result;
   } catch (e) {
     console.log(e);
