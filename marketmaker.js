@@ -36,6 +36,7 @@ for (let marketId in MM_CONFIG.pairs) {
 }
 console.log("ACTIVE PAIRS", activePairs);
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
+const VAULT = MM_CONFIG.vault;
 
 const infuraID = MM_CONFIG.infura ? MM_CONFIG.infura : process.env.INFURA;
 
@@ -581,7 +582,7 @@ async function getOrderCalldata(
     .mul(marketInfo.takerVolumeFee * 10000)
     .div(9999);
 
-  const userAccount = await WALLET.getAddress();
+  const userAccount = await getMMBotAccount();
   let domain, Order, types;
   if (Number(marketInfo.contractVersion) === 6) {
     let gasFeeBN;
@@ -759,7 +760,7 @@ async function getBalances() {
 }
 
 async function getBalanceOfCurrency(token, contractAddress) {
-  const account = await WALLET.getAddress();
+  const account = await getMMBotAccount();
   let result = { value: 0, allowance: ethers.constants.Zero };
   if (!rollupProvider) return result;
 
@@ -794,5 +795,9 @@ async function getBalanceOfCurrency(token, contractAddress) {
   } catch (e) {
     console.log(e);
     return result;
+  }
+
+  async function getMMBotAccount() {
+    return VAULT ? VAULT : WALLET.getAddress();
   }
 }
