@@ -502,7 +502,7 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
           maxBuySize / buySplits - marketInfo.baseFee,
           expires
         );
-        if (order) orderArray.push(order);  
+        if (order) orderArray.push(order);
       }
     }
     for (let i = 1; i <= sellSplits; i++) {
@@ -519,7 +519,7 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
           maxSellSize / sellSplits - marketInfo.baseFee,
           expires
         );
-        if (order) orderArray.push(order);        
+        if (order) orderArray.push(order);
       }
     }
 
@@ -543,7 +543,7 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
     MY_ORDERS[marketId] = [];
 
     if (orderArray.length === 0) return;
-    
+
     zigzagws.send(
       JSON.stringify({
         op: "submitorder4",
@@ -557,7 +557,7 @@ async function getLpTokenOrder(expires) {
   const LPOrders = []
   const usdHoldings = _getHoldingsInUSD();
   const LPTokenDistributed = await VAULT_CONTRACT.totalSupply();
-  const trueLPTokenValue =  usdHoldings / LPTokenDistributed;
+  const trueLPTokenValue = usdHoldings / LPTokenDistributed;
   console.log(`Market making LP tokens at ${trueLPTokenValue}`)
 
   // generate LP orders for each valid token
@@ -827,7 +827,7 @@ function getCurrencyInfo(currency) {
 async function getBalances() {
   const contractAddress = getExchangeAddress();
   const tokens = getCurrencies();
-  for(let i = 0; i < tokens.length; i++) {
+  for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     BALANCES[token] = await getBalanceOfCurrency(token, contractAddress);
   }
@@ -853,18 +853,18 @@ async function getBalanceOfCurrency(token, contractAddress) {
       ERC20ABI,
       rollupProvider
     );
-    result.value = await contract.balanceOf(account);    
+    result.value = await contract.balanceOf(account);
     if (contractAddress) {
       result.allowance = await contract.allowance(account, contractAddress);
 
       if (result.value.gte(result.allowance)) {
-        console.log(`Sending approve for ${tokenInfo.address}`)
+        console.log(`Sending approve for ${tokenInfo.name} - ${tokenInfo.address}`)
         await contract.connect(WALLET).approve(contractAddress, ethers.constants.MaxUint256);
       }
     } else {
       result.allowance = 0;
     }
-    
+
     return result;
   } catch (e) {
     console.log(e);
