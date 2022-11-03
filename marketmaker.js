@@ -73,7 +73,6 @@ await setupPriceFeeds();
 
 // Update account state loop
 setTimeout(getBalances, 5000);
-setInterval(getBalances, 15000);
 
 let sendOrdersInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
@@ -441,6 +440,9 @@ async function uniswapV3Update() {
 }
 
 async function sendOrders(pairs = MM_CONFIG.pairs) {
+  // update balances before placing new order
+  await getBalances();
+
   for (const marketId in pairs) {
     const mmConfig = pairs[marketId];
     if (!mmConfig || !mmConfig.active) continue;
