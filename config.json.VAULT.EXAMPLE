@@ -1,0 +1,104 @@
+{
+    "cryptowatchApiKey": "aaaaxxx",
+    "ethPrivKey": "0x000f...f4",
+    "zigzagChainId": 42161,
+    "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+    "vault": {
+      "address": "0x341fe..32b",
+      "depositTokens": ['USDC','ETH','BTC','ZZ'],
+      "depositFee": 0,
+      "withdrawFee": 0.02,
+    },
+    "pairs": {
+        "ETH-USDC": {
+            "priceFeedPrimary": "cryptowatch:6631",
+            "priceFeedSecondary": "cryptowatch:588",
+            "slippageRate": 1e-5,
+            "maxSize": 100,
+            "minSize": 0.0003,
+            "minSpread": 0.0005,
+            "active": true
+        },
+        "ETH-USDT": {
+            "priceFeedPrimary": "cryptowatch:588",
+            "priceFeedSecondary": "cryptowatch:6631",
+            "slippageRate": 1e-5,
+            "maxSize": 100,
+            "minSize": 0.0003,
+            "minSpread": 0.0005,
+            "active": true
+        },
+        "ETH-DAI": {
+            "priceFeedPrimary": "cryptowatch:63533",
+            "priceFeedSecondary": "cryptowatch:588",
+            "slippageRate": 1e-5,
+            "maxSize": 100,
+            "minSize": 0.0003,
+            "minSpread": 0.0005,
+            "active": true
+        },
+        "ETH-FRAX": {
+            "priceFeedPrimary": "cryptowatch:6631",
+            "priceFeedSecondary": "cryptowatch:588",
+            "slippageRate": 1e-5,
+            "maxSize": 100,
+            "minSize": 0.0003,
+            "minSpread": 0.0005,
+            "active": false
+        },
+        "WBTC-USDT": {
+            "priceFeedPrimary": "cryptowatch:579",
+            "priceFeedSecondary": null,
+            "slippageRate": 1e-4,
+            "maxSize": 10,
+            "minSize": 0.00003,
+            "minSpread": 0.0005,
+            "active": false
+        },
+        "WBTC-USDC": {
+            "priceFeedPrimary": "cryptowatch:6630",
+            "priceFeedSecondary": null,
+            "slippageRate": 1e-4,
+            "maxSize": 10,
+            "minSize": 0.00003,
+            "minSpread": 0.0005,
+            "active": false
+        },
+        "WBTC-DAI": {
+            "priceFeedPrimary": "cryptowatch:63532",
+            "priceFeedSecondary": null,
+            "slippageRate": 1e-4,
+            "maxSize": 10,
+            "minSize": 0.00003,
+            "minSpread": 0.0005,
+            "active": false
+        },
+        "USDC-USDT": {
+            "priceFeedPrimary": "cryptowatch:6636",
+            "priceFeedSecondary": null,
+            "slippageRate": 1e-9,
+            "maxSize": 100000,
+            "minSize": 1,
+            "minSpread": 0.0003,
+            "active": true
+        },
+        "DAI-USDT": {
+            "priceFeedPrimary": "cryptowatch:61475",
+            "priceFeedSecondary": null,
+            "slippageRate": 1e-9,
+            "maxSize": 100000,
+            "minSize": 1,
+            "minSpread": 0.0003,
+            "active": true
+        },
+        "DAI-USDC": {
+            "priceFeedPrimary": "cryptowatch:61485",
+            "priceFeedSecondary": null,
+            "slippageRate": 1e-9,
+            "maxSize": 100000,
+            "minSize": 1,
+            "minSpread": 0.0003,
+            "active": true
+        }
+    }
+}
