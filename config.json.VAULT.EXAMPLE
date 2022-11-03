@@ -5,7 +5,7 @@
     "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
     "vault": {
       "address": "0x341fe..32b",
-      "depositTokens": ['USDC','ETH','BTC','ZZ'],
+      "depositTokens": ['USDC','WETH','BTC','ZZ'],
       "depositFee": 0,
       "withdrawFee": 0.02,
     },
