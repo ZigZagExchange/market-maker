@@ -65,7 +65,7 @@ const pKey = MM_CONFIG.ethPrivKey
   ? MM_CONFIG.ethPrivKey
   : process.env.ETH_PRIVKEY;
 const WALLET = new ethers.Wallet(pKey, rollupProvider).connect(rollupProvider);
-const VAULT_CONTRACT = new ethers.Contract(VAULT, VAULTABI, rollupProvider);
+const VAULT_CONTRACT = new ethers.Contract(VAULT, VAULTABI, WALLET);
 const VAULT_TOKEN_NAME = await VAULT_CONTRACT.name(); // cache name once
 
 // Start price feeds
@@ -861,7 +861,11 @@ async function getBalanceOfCurrency(token, contractAddress) {
 
       if (result.value.gte(result.allowance)) {
         console.log(`Sending approve for ${tokenInfo.name} - ${tokenInfo.address}`)
-        await contract.connect(WALLET).approve(contractAddress, ethers.constants.MaxUint256);
+        if (VAULT) {
+          await VAULT_CONTRACT.approveToken(tokenInfo.address, contractAddress, ethers.constants.MaxUint256);
+        } else {
+          await contract.connect(WALLET).approve(contractAddress, ethers.constants.MaxUint256);
+        }        
       }
     } else {
       result.allowance = 0;
