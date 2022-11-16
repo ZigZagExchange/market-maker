@@ -452,6 +452,7 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
   // update balances before placing new order
   await getBalances();
 
+  const expires = ((Date.now() / 1000) | 0) + 15; // 15s expiry
   for (const marketId in pairs) {
     const mmConfig = pairs[marketId];
     if (!mmConfig || !mmConfig.active) continue;
@@ -471,9 +472,7 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
       : PRICE_FEEDS[mmConfig.priceFeedPrimary];
     if (!midPrice) continue;
 
-    const expires = ((Date.now() / 1000) | 0) + 15; // 15s expiry
     const side = mmConfig.side || "d";
-
     const maxBaseBalance = BALANCES[marketInfo.baseAsset.symbol].value;
     const maxQuoteBalance = BALANCES[marketInfo.quoteAsset.symbol].value;
     const baseBalance = maxBaseBalance / 10 ** marketInfo.baseAsset.decimals;
@@ -564,47 +563,65 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
       })
     );
   }
-}
 
-async function getLpTokenOrder(expires) {
-  const LPOrders = []
-  const usdHoldings = await _getHoldingsInUSD();
-  const LPTokenDistributedBN = await VAULT_CONTRACT.circulatingSupply();
-  const LPTokenDistributed = Number(ethers.utils.formatUnits(LPTokenDistributedBN, VAULT_DECIMALS));
-  const trueLPTokenValue = LPTokenDistributed ? usdHoldings / LPTokenDistributed : VAULT_INITIAL_PRICE;
+  if (VAULT) {
+    try {
+      const LPOrders = []
+      const usdHoldings = await _getHoldingsInUSD();
+      const LPTokenDistributedBN = await VAULT_CONTRACT.circulatingSupply();
+      const LPTokenDistributed = Number(ethers.utils.formatUnits(LPTokenDistributedBN, VAULT_DECIMALS));
+      const trueLPTokenValue = LPTokenDistributed ? usdHoldings / LPTokenDistributed : VAULT_INITIAL_PRICE;
 
-  // generate LP orders for each valid token
-  const result = VAULT_DEPOSIT_TOKENS.map(async (token) => {
-    const market = `${VAULT_TOKEN_SYMBOL}-${token}`;
-    const tokenInfo = getCurrencyInfo(token);
-    if (!tokenInfo) return;
+      console.log('VAULT_DEPOSIT_TOKENS', VAULT_DEPOSIT_TOKENS)
+      // generate LP orders for each valid token
+      const result = VAULT_DEPOSIT_TOKENS.map(async (token) => {
+        const market = `${VAULT_TOKEN_SYMBOL}-${token}`;
+        const tokenInfo = getCurrencyInfo(token);
+        if (!tokenInfo) return;
 
-    // calculate the LP token price for this token
-    const LPPriceInKind = trueLPTokenValue / tokenInfo.usdPrice;
+        // calculate the LP token price for this token
+        const LPPriceInKind = trueLPTokenValue / tokenInfo.usdPrice;
 
-    const amountDeposit = ethers.utils.formatUnits(BALANCES[VAULT_TOKEN_SYMBOL].value.toString(), VAULT_DECIMALS);
-    const depositLPOrder = await getOrderCalldata(
-      market,
-      's',
-      LPPriceInKind * (1 + VAULT_DEPOSIT_FEE),
-      amountDeposit,
-      expires
-    );
-    LPOrders.push(depositLPOrder);
+        const amountDeposit = ethers.utils.formatUnits(BALANCES[VAULT_TOKEN_SYMBOL].value.toString(), VAULT_DECIMALS);
+        const depositLPOrder = await getOrderCalldata(
+          market,
+          's',
+          LPPriceInKind * (1 + VAULT_DEPOSIT_FEE),
+          amountDeposit,
+          expires
+        );
+        if (depositLPOrder) LPOrders.push(depositLPOrder);
 
-    const amountWithdraw = ethers.utils.formatUnits(BALANCES[token].value.toString(), tokenInfo.decimals);
-    const withdrawLPOrder = await getOrderCalldata(
-      market,
-      'b',
-      LPPriceInKind * (1 - VAULT_WITHDRAW_FEE),
-      amountWithdraw,
-      expires
-    );
-    LPOrders.push(withdrawLPOrder);
-  });
+        const amountWithdraw = ethers.utils.formatUnits(BALANCES[token].value.toString(), tokenInfo.decimals);
+        const withdrawLPOrder = await getOrderCalldata(
+          market,
+          'b',
+          LPPriceInKind * (1 - VAULT_WITHDRAW_FEE),
+          amountWithdraw,
+          expires
+        );
+        if (withdrawLPOrder) LPOrders.push(withdrawLPOrder);
 
-  await Promise.all(result);
-  return LPOrders;
+        // sign all orders to be canceled
+        const cancelOrderArray = [];
+        const result = MY_ORDERS[market].map(async (order) => {
+          cancelOrderArray.push(await getCancelOrderEntry(order));
+        });
+        await Promise.all(result);
+
+        zigzagws.send(
+          JSON.stringify({
+            op: "submitorder4",
+            args: [CHAIN_ID, market, LPOrders, cancelOrderArray],
+          })
+        );
+      });
+
+      await Promise.all(result);     
+    } catch (e) {
+      console.log(`Could not fetch current LP token supply: ${e.message}`);
+    }    
+  }  
 }
 
 async function _getHoldingsInUSD() {
