@@ -18,7 +18,7 @@ let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
 
 const ERC20ABI = JSON.parse(fs.readFileSync("ABIs/ERC20.abi"));
-const VAULTABI = JSON.parse(fs.readFileSync("ABIs/vault.abi"));
+const VAULTABI = JSON.parse(fs.readFileSync("ABIs/ZigZagVault.abi"));
 
 // Load MM config
 let MM_CONFIG;
@@ -41,6 +41,7 @@ const VAULT = MM_CONFIG.vault.address;
 const VAULT_DEPOSIT_TOKENS = MM_CONFIG.vault.depositTokens;
 const VAULT_DEPOSIT_FEE = MM_CONFIG.vault.depositFee || 0.01; // default != 0 to prevent arb
 const VAULT_WITHDRAW_FEE = MM_CONFIG.vault.withdrawFee || 0.01; // default != 0 to prevent arb
+const VAULT_INITIAL_PRICE = MM_CONFIG.vault.initialPrice || 1;
 
 if (VAULT && !VAULT_DEPOSIT_TOKENS) {
   throw new Error('vault need deposit token list')
@@ -66,7 +67,10 @@ const pKey = MM_CONFIG.ethPrivKey
   : process.env.ETH_PRIVKEY;
 const WALLET = new ethers.Wallet(pKey, rollupProvider).connect(rollupProvider);
 const VAULT_CONTRACT = new ethers.Contract(VAULT, VAULTABI, WALLET);
-const VAULT_TOKEN_NAME = await VAULT_CONTRACT.name(); // cache name once
+const [VAULT_TOKEN_SYMBOL, VAULT_DECIMALS] = await Promise.all([
+  VAULT_CONTRACT.symbol(),
+  VAULT_CONTRACT.decimals()
+]);
 
 // Start price feeds
 await setupPriceFeeds();
@@ -89,6 +93,11 @@ function onWsOpen() {
       zigzagws.send(JSON.stringify(msg));
     }
   }
+
+  VAULT_DEPOSIT_TOKENS.forEach(depositToken => {
+    const msg = { op: "subscribemarket", args: [CHAIN_ID, `${VAULT_TOKEN_SYMBOL}-${depositToken}`] };
+    zigzagws.send(JSON.stringify(msg));
+  })
 }
 
 function onWsClose() {
@@ -528,7 +537,9 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
     if (VAULT) {
       try {
         const LPOrders = await getLpTokenOrder(expires);
-        orderArray = orderArray.concat(LPOrders);
+        LPOrders.forEach(order => {
+          if (order) orderArray.push(order);
+        })
       } catch (e) {
         console.log(`Could not fetch current LP token supply: ${e.message}`);
       }
@@ -557,34 +568,36 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
 
 async function getLpTokenOrder(expires) {
   const LPOrders = []
-  const usdHoldings = _getHoldingsInUSD();
-  const LPTokenDistributed = await VAULT_CONTRACT.totalSupply();
-  const trueLPTokenValue = usdHoldings / LPTokenDistributed;
-  console.log(`Market making LP tokens at ${trueLPTokenValue}`)
+  const usdHoldings = await _getHoldingsInUSD();
+  const LPTokenDistributedBN = await VAULT_CONTRACT.circulatingSupply();
+  const LPTokenDistributed = Number(ethers.utils.formatUnits(LPTokenDistributedBN, VAULT_DECIMALS));
+  const trueLPTokenValue = LPTokenDistributed ? usdHoldings / LPTokenDistributed : VAULT_INITIAL_PRICE;
 
   // generate LP orders for each valid token
   const result = VAULT_DEPOSIT_TOKENS.map(async (token) => {
-    const market = `${VAULT_TOKEN_NAME}-${token}`;
+    const market = `${VAULT_TOKEN_SYMBOL}-${token}`;
     const tokenInfo = getCurrencyInfo(token);
     if (!tokenInfo) return;
 
     // calculate the LP token price for this token
     const LPPriceInKind = trueLPTokenValue / tokenInfo.usdPrice;
 
+    const amountDeposit = ethers.utils.formatUnits(BALANCES[VAULT_TOKEN_SYMBOL].value.toString(), VAULT_DECIMALS);
     const depositLPOrder = await getOrderCalldata(
       market,
       's',
       LPPriceInKind * (1 + VAULT_DEPOSIT_FEE),
-      BALANCES[VAULT_TOKEN_NAME],
+      amountDeposit,
       expires
     );
     LPOrders.push(depositLPOrder);
 
+    const amountWithdraw = ethers.utils.formatUnits(BALANCES[token].value.toString(), tokenInfo.decimals);
     const withdrawLPOrder = await getOrderCalldata(
       market,
       'b',
       LPPriceInKind * (1 - VAULT_WITHDRAW_FEE),
-      BALANCES[token],
+      amountWithdraw,
       expires
     );
     LPOrders.push(withdrawLPOrder);
@@ -604,7 +617,8 @@ async function _getHoldingsInUSD() {
     // dont count the minted, but not distributed LP tokens
     if (tokenInfo.address === VAULT) return;
 
-    usdHoldings += BALANCES[token] * tokenInfo.usdPrice;
+    const amount = ethers.utils.formatUnits(BALANCES[token].value.toString(), tokenInfo.decimals);
+    usdHoldings += amount * tokenInfo.usdPrice;
   })
 
   return usdHoldings;
@@ -734,6 +748,13 @@ function getCurrencies() {
     tickers.add(pair.split("-")[0]);
     tickers.add(pair.split("-")[1]);
   });
+
+  if(VAULT) {
+    tickers.add(VAULT_TOKEN_SYMBOL);
+    VAULT_DEPOSIT_TOKENS.forEach(depositToken => {
+      tickers.add(depositToken);
+    });
+  }
   return [...tickers];
 }
 
