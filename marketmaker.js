@@ -533,17 +533,6 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
       }
     }
 
-    if (VAULT) {
-      try {
-        const LPOrders = await getLpTokenOrder(expires);
-        LPOrders.forEach(order => {
-          if (order) orderArray.push(order);
-        })
-      } catch (e) {
-        console.log(`Could not fetch current LP token supply: ${e.message}`);
-      }
-    }
-
     // sign all orders to be canceled
     const cancelOrderArray = [];
     const result = MY_ORDERS[marketId].map(async (order) => {
