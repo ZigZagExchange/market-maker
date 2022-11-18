@@ -5,10 +5,31 @@
   "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
   "vault": {
     "address": "0x341fe..32b",
-    "depositTokens": ["USDC","WETH","BTC","ZZ"],
     "depositFee": 0,
     "withdrawFee": 0.02,
-    "initialPrice": 1
+    "initialPrice": 1,
+    "depositTokens": {
+      "USDC": {
+        "priceFeedPrimary": "cryptowatch:61633",
+        "priceFeedSecondary": null,
+        "active": true
+      },
+      "WETH": {
+        "priceFeedPrimary": "cryptowatch:6631",
+        "priceFeedSecondary": null,
+        "active": true
+      },
+      "WBTC": {
+        "priceFeedPrimary": "cryptowatch:92864",
+        "priceFeedSecondary": null,
+        "active": true
+      },
+      "ZZ": {
+        "priceFeedPrimary": "cryptowatch:6631",
+        "priceFeedSecondary": null,
+        "active": true
+      }
+    }
   },
   "pairs": {
     "ETH-USDC": {

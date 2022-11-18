@@ -38,7 +38,7 @@ for (let marketId in MM_CONFIG.pairs) {
 console.log("ACTIVE PAIRS", activePairs);
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const VAULT = MM_CONFIG.vault.address;
-const VAULT_DEPOSIT_TOKENS = MM_CONFIG.vault.depositTokens;
+const VAULT_DEPOSIT_TOKENS = Object.keys(MM_CONFIG.vault.depositTokens);
 const VAULT_DEPOSIT_FEE = MM_CONFIG.vault.depositFee || 0.01; // default != 0 to prevent arb
 const VAULT_WITHDRAW_FEE = MM_CONFIG.vault.withdrawFee || 0.01; // default != 0 to prevent arb
 const VAULT_INITIAL_PRICE = MM_CONFIG.vault.initialPrice || 1;
@@ -72,6 +72,7 @@ const [VAULT_TOKEN_SYMBOL, VAULT_DECIMALS] = await Promise.all([
   VAULT_CONTRACT.decimals()
 ]);
 
+
 // Start price feeds
 await setupPriceFeeds();
 
@@ -88,16 +89,21 @@ function onWsOpen() {
   zigzagws.on("message", handleMessage);
   sendOrdersInterval = setInterval(sendOrders, 7000);
   for (let market in MM_CONFIG.pairs) {
+    MY_ORDERS[market] = [];
     if (MM_CONFIG.pairs[market].active) {
       const msg = { op: "subscribemarket", args: [CHAIN_ID, market] };
       zigzagws.send(JSON.stringify(msg));
     }
   }
 
-  VAULT_DEPOSIT_TOKENS.forEach(depositToken => {
-    const msg = { op: "subscribemarket", args: [CHAIN_ID, `${VAULT_TOKEN_SYMBOL}-${depositToken}`] };
-    zigzagws.send(JSON.stringify(msg));
-  })
+  for (let depositToken in MM_CONFIG.vault.depositTokens) {
+    const market = `${VAULT_TOKEN_SYMBOL}-${depositToken}`;
+    MY_ORDERS[market] = [];
+    if (MM_CONFIG.vault.depositTokens[depositToken].active) {
+      const msg = { op: "subscribemarket", args: [CHAIN_ID, market] };
+      zigzagws.send(JSON.stringify(msg));
+    }
+  }
 }
 
 function onWsClose() {
@@ -153,43 +159,80 @@ async function handleMessage(json) {
   }
 }
 
-function validatePriceFeed(marketId) {
-  const mmConfig = MM_CONFIG.pairs[marketId];
-  const primaryPriceFeedId = mmConfig.priceFeedPrimary;
-  const secondaryPriceFeedId = mmConfig.priceFeedSecondary;
+function validatePriceFeedMarket(marketId) {
+  return _validatePriceFeed(MM_CONFIG.pairs[marketId]);
+}
+
+function getValidatedPriceDepositToken(token) {
+  return _validatePriceFeed(MM_CONFIG.vault.depositTokens[token]);
+}
+
+function _validatePriceFeed(config) {
+  const { priceFeedPrimary, priceFeedSecondary } = config;
 
   // Constant mode checks
-  const [mode, price] = primaryPriceFeedId.split(":");
+  const [mode, price] = priceFeedPrimary.split(":");
   if (mode === "constant") {
-    if (price > 0) return true;
+    if (price > 0) return price;
     else throw new Error("No initPrice available");
   }
 
   // Check if primary price exists
-  const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
+  const primaryPrice = PRICE_FEEDS[priceFeedPrimary];
   if (!primaryPrice) throw new Error("Primary price feed unavailable");
 
   // If there is no secondary price feed, the price auto-validates
-  if (!secondaryPriceFeedId) return true;
+  if (!priceFeedSecondary) return primaryPrice;
 
   // Check if secondary price exists
-  const secondaryPrice = PRICE_FEEDS[secondaryPriceFeedId];
+  const secondaryPrice = PRICE_FEEDS[priceFeedSecondary];
   if (!secondaryPrice) throw new Error("Secondary price feed unavailable");
 
-  // If the secondary price feed varies from the primary price feed by more than 1%, assume something is broken
+  // If the secondary price feed varies from the primary price feed by more than 2%, assume something is broken
   const percentDiff = Math.abs(primaryPrice - secondaryPrice) / primaryPrice;
-  if (percentDiff > 0.03) {
+  if (percentDiff > 0.02) {
     console.error("Primary and secondary price feeds do not match!");
     throw new Error("Circuit breaker triggered");
   }
 
-  return true;
+  return primaryPrice;
 }
 
 async function setupPriceFeeds() {
-  const cryptowatch = [],
-    chainlink = [],
-    uniswapV3 = [];
+  const cryptowatch = [], chainlink = [], uniswapV3 = [];
+
+  const _startFeed = (feed) => {
+    if (!feed) {
+      return;
+    }
+    const [provider, id] = feed.split(":");
+    switch (provider) {
+      case "cryptowatch":
+        if (!cryptowatch.includes(id)) {
+          cryptowatch.push(id);
+        }
+        break;
+      case "chainlink":
+        if (!chainlink.includes(id)) {
+          chainlink.push(id);
+        }
+        break;
+      case "uniswapv3":
+        if (!uniswapV3.includes(id)) {
+          uniswapV3.push(id);
+        }
+        break;
+      case "constant":
+        PRICE_FEEDS["constant:" + id] = parseFloat(id);
+        break;
+      default:
+        throw new Error(
+          "Price feed provider " + provider + " is not available."
+        );
+        break;
+    }
+  }
+
   for (let market in MM_CONFIG.pairs) {
     const pairConfig = MM_CONFIG.pairs[market];
     if (!pairConfig.active) {
@@ -203,52 +246,38 @@ async function setupPriceFeeds() {
       const initPrice = pairConfig.initPrice;
       pairConfig["priceFeedPrimary"] = "constant:" + initPrice.toString();
     }
-    const primaryPriceFeed = pairConfig.priceFeedPrimary;
-    const secondaryPriceFeed = pairConfig.priceFeedSecondary;
 
     // parse keys to lower case to match later PRICE_FEED keys
-    if (primaryPriceFeed) {
-      MM_CONFIG.pairs[market].priceFeedPrimary = primaryPriceFeed.toLowerCase();
+    if (pairConfig.priceFeedPrimary) {
+      const feed = pairConfig.priceFeedPrimary.toLowerCase();
+      _startFeed(feed);
+      MM_CONFIG.pairs[market].priceFeedPrimary = feed;
     }
-    if (secondaryPriceFeed) {
-      MM_CONFIG.pairs[market].priceFeedSecondary =
-        secondaryPriceFeed.toLowerCase();
+    if (pairConfig.priceFeedSecondary) {
+      const feed = pairConfig.priceFeedSecondary.toLowerCase();
+      _startFeed(feed);
+      MM_CONFIG.pairs[market].priceFeedSecondary = feed;
     }
-    [primaryPriceFeed, secondaryPriceFeed].forEach((priceFeed) => {
-      if (!priceFeed) {
-        return;
-      }
-      const [provider, id] = priceFeed.split(":");
-      switch (provider.toLowerCase()) {
-        case "cryptowatch":
-          if (!cryptowatch.includes(id)) {
-            cryptowatch.push(id);
-          }
-          break;
-        case "chainlink":
-          if (!chainlink.includes(id)) {
-            chainlink.push(id);
-          }
-          break;
-        case "uniswapv3":
-          if (!uniswapV3.includes(id)) {
-            uniswapV3.push(id);
-          }
-          break;
-        case "constant":
-          PRICE_FEEDS["constant:" + id] = parseFloat(id);
-          break;
-        default:
-          throw new Error(
-            "Price feed provider " + provider + " is not available."
-          );
-          break;
-      }
-    });
-
-    // instantiate open orders array for market
-    MY_ORDERS[market] = [];
   }
+
+  if (VAULT_DEPOSIT_TOKENS) {
+    for (let token in MM_CONFIG.vault.depositTokens) {
+      const depositConfig = MM_CONFIG.vault.depositTokens[token];
+
+      // parse keys to lower case to match later PRICE_FEED keys
+      if (depositConfig.priceFeedPrimary) {
+        const feed = depositConfig.priceFeedPrimary.toLowerCase();
+        _startFeed(feed);
+        MM_CONFIG.vault.depositTokens[token].priceFeedPrimary = feed;
+      }
+      if (depositConfig.priceFeedSecondary) {
+        const feed = depositConfig.priceFeedSecondary.toLowerCase();
+        _startFeed(feed);
+        MM_CONFIG.vault.depositTokens[token].priceFeedSecondary = feed;
+      }
+    }
+  }
+
   if (chainlink.length > 0) await chainlinkSetup(chainlink);
   if (cryptowatch.length > 0) await cryptowatchWsSetup(cryptowatch);
   if (uniswapV3.length > 0) await uniswapV3Setup(uniswapV3);
@@ -457,19 +486,18 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
     const mmConfig = pairs[marketId];
     if (!mmConfig || !mmConfig.active) continue;
 
+    let price;
     try {
-      validatePriceFeed(marketId);
+      price = validatePriceFeedMarket(marketId);
     } catch (e) {
-      console.error("Can not sendOrders (" + marketId + ") because: " + e);
+      console.error(`Can not sendOrders for ${marketId} because: ${e.message}`);
       continue;
     }
 
     const marketInfo = MARKETS[marketId];
     if (!marketInfo) continue;
 
-    const midPrice = mmConfig.invert
-      ? 1 / PRICE_FEEDS[mmConfig.priceFeedPrimary]
-      : PRICE_FEEDS[mmConfig.priceFeedPrimary];
+    const midPrice = mmConfig.invert ? 1 / price : price;
     if (!midPrice) continue;
 
     const side = mmConfig.side || "d";
@@ -561,17 +589,21 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
       const LPTokenDistributed = Number(ethers.utils.formatUnits(LPTokenDistributedBN, VAULT_DECIMALS));
       const trueLPTokenValue = LPTokenDistributed ? usdHoldings / LPTokenDistributed : VAULT_INITIAL_PRICE;
 
-      console.log('VAULT_DEPOSIT_TOKENS', VAULT_DEPOSIT_TOKENS)
       // generate LP orders for each valid token
       const result = VAULT_DEPOSIT_TOKENS.map(async (token) => {
+        // only show orders for active pairs
+        if (!MM_CONFIG.vault.depositTokens[token].active) return;
+        const priceFeedKey = MM_CONFIG.vault.depositTokens[token].priceFeedPrimary;
+
         const market = `${VAULT_TOKEN_SYMBOL}-${token}`;
         const tokenInfo = getCurrencyInfo(token);
         if (!tokenInfo) return;
 
         // calculate the LP token price for this token
-        const LPPriceInKind = trueLPTokenValue / tokenInfo.usdPrice;
+        const tokenPrice = getValidatedPriceDepositToken(token)
+        const LPPriceInKind = trueLPTokenValue / tokenPrice;
 
-        const amountDeposit = ethers.utils.formatUnits(BALANCES[VAULT_TOKEN_SYMBOL].value.toString(), VAULT_DECIMALS);
+        const amountDeposit = ethers.utils.formatUnits(BALANCES[VAULT_TOKEN_SYMBOL].value, VAULT_DECIMALS);
         const depositLPOrder = await getOrderCalldata(
           market,
           's',
@@ -581,12 +613,13 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
         );
         if (depositLPOrder) LPOrders.push(depositLPOrder);
 
-        const amountWithdraw = ethers.utils.formatUnits(BALANCES[token].value.toString(), tokenInfo.decimals);
+        const amountWithdraw = ethers.utils.formatUnits(BALANCES[token].value, tokenInfo.decimals);
+        const withdrawPrice = LPPriceInKind * (1 - VAULT_WITHDRAW_FEE);
         const withdrawLPOrder = await getOrderCalldata(
           market,
           'b',
-          LPPriceInKind * (1 - VAULT_WITHDRAW_FEE),
-          amountWithdraw,
+          withdrawPrice,
+          amountWithdraw / withdrawPrice,
           expires
         );
         if (withdrawLPOrder) LPOrders.push(withdrawLPOrder);
@@ -598,6 +631,9 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
         });
         await Promise.all(result);
 
+        // clear all orders, they either failed to cancel or got canceld
+        MY_ORDERS[market] = [];
+
         zigzagws.send(
           JSON.stringify({
             op: "submitorder4",
@@ -606,26 +642,29 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
         );
       });
 
-      await Promise.all(result);     
+      await Promise.all(result);
     } catch (e) {
-      console.log(`Could not fetch current LP token supply: ${e.message}`);
-    }    
-  }  
+      console.log(`Could not send LP token offers: ${e.message}`);
+    }
+  }
 }
 
 async function _getHoldingsInUSD() {
   const tokens = Object.keys(BALANCES);
   let usdHoldings = 0;
-  tokens.forEach(token => {
-    const tokenInfo = getCurrencyInfo(token);
-    if (!tokenInfo) return;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
 
     // dont count the minted, but not distributed LP tokens
-    if (tokenInfo.address === VAULT) return;
+    if (token === VAULT_TOKEN_SYMBOL) continue;
+
+    const tokenInfo = getCurrencyInfo(token);
+    if (!tokenInfo) continue;
 
     const amount = ethers.utils.formatUnits(BALANCES[token].value.toString(), tokenInfo.decimals);
-    usdHoldings += amount * tokenInfo.usdPrice;
-  })
+    const tokenPrice = getValidatedPriceDepositToken(token);
+    usdHoldings += amount * tokenPrice;
+  }
 
   return usdHoldings;
 }
@@ -637,7 +676,6 @@ async function getOrderCalldata(
   size,
   expirationTimeSeconds
 ) {
-  console.log(`Side: ${side}, price ${price}, size: ${size}`);
   const marketInfo = MARKETS[marketId];
   if (!marketInfo) return null;
   const baseAmount = size;
@@ -645,7 +683,6 @@ async function getOrderCalldata(
 
   if (baseAmount < marketInfo.baseFee || quoteAmount < marketInfo.quoteFee)
     return;
-
   const baseAmountBN = ethers.utils.parseUnits(
     Number(baseAmount).toFixed(marketInfo.baseAsset.decimals),
     marketInfo.baseAsset.decimals
@@ -755,7 +792,7 @@ function getCurrencies() {
     tickers.add(pair.split("-")[1]);
   });
 
-  if(VAULT) {
+  if (VAULT) {
     tickers.add(VAULT_TOKEN_SYMBOL);
     VAULT_DEPOSIT_TOKENS.forEach(depositToken => {
       tickers.add(depositToken);
@@ -776,7 +813,7 @@ function getCurrencyInfo(currency) {
       symbol: VAULT_TOKEN_SYMBOL,
       decimals: VAULT_DECIMALS,
       usdPrice: 1
-    }    
+    }
   }
 
   const pairs = getPairs();
@@ -833,7 +870,7 @@ async function getBalanceOfCurrency(token, contractAddress) {
           await VAULT_CONTRACT.approveToken(tokenInfo.address, contractAddress, ethers.constants.MaxUint256);
         } else {
           await contract.connect(WALLET).approve(contractAddress, ethers.constants.MaxUint256);
-        }        
+        }
       }
     } else {
       result.allowance = 0;
