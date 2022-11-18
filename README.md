@@ -63,7 +63,7 @@ and set it to the value of the `MM_CONFIG` environment variable to override the 
 
 You can add, remove, and configure pair settings in the `pairs` section. A pair setting looks like this:
 
-```
+```json
 "ETH-USDC": {
     "mode": "pricefeed",
     "side": "d",
@@ -108,7 +108,7 @@ You need a Cryptowatch API key to use the market maker. Once you obtain one, you
 You can use [this link](https://api.cryptowat.ch/markets) to download a JSON with all available market endpoints. Add those to you pair config as "cryptowatch:<id>".
 
 Example:
-```
+```json
 "ETH-USDC": {
     "side": "d",
     "priceFeedPrimary": "cryptowatch:6631",
@@ -119,8 +119,7 @@ Example:
 
 ###### Chainlink
 With chainlink you have access to price oracles via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
-```
-
+```json
 "infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
 "pairs": {
   "ETH-USDC": {
@@ -130,7 +129,7 @@ With chainlink you have access to price oracles via blockchain. The requests are
   }
 ```
 You can get the available market contracts [here.](https://docs.chain.link/docs/ethereum-addresses/)Add those to you pair config as "chainlink:<address>", like this:
-```
+```json
 "ETH-USDC": {
     "side": "d",
     "priceFeedPrimary": "chainlink:0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
@@ -141,7 +140,7 @@ You can get the available market contracts [here.](https://docs.chain.link/docs/
 
 ###### UniswapV3
 With uniswapV3 you have access to price feed's via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
-```
+```json
 "infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
 "pairs": {
   "ETH-USDC": {
@@ -151,7 +150,7 @@ With uniswapV3 you have access to price feed's via blockchain. The requests are 
   }
 ```
 You can get the available market contracts [here.](https://info.uniswap.org) Select a token and then a pool matching the pair you plan to market make. Make sure base and quote tokens match (USDC-ETH don't work for ETH-USDC). After selecting a pool, you can see the adress in the browser URL. Add that to your pair config as "uniswapv3:<address>", like this:
-```
+```json
 "ETH-USDC": {
     "side": "d",
     "priceFeedPrimary": "uniswapv3:0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
@@ -163,7 +162,7 @@ You can get the available market contracts [here.](https://info.uniswap.org) Sel
 ###### Constant
 With constant mode, you can set a fixed price to market make. The bot will not change that price. Any secondary price feed will be ignored, if used as priceFeedPrimary. Also good as a `priceFeedSecondary` on stablecoins.
 
-```
+```json
 "DAI-USDC": {
     "side": "d",
     "priceFeedPrimary": "constant:1",
@@ -175,7 +174,7 @@ With constant mode, you can set a fixed price to market make. The bot will not c
 ###### Invert price feed
 For some pairs, you might just find a price feed for the inverse of the pair. If you want to mm for ZZ-USDC and only find a USDC-ZZ price feed. In those cases, you need to invert the fee. This will only work if the secondary price feed is inverted as well or set to null.
 Example:
-```
+```json
 "ETH-USDC": {
     "side": "d",
     "priceFeedPrimary": "uniswapv3:0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
@@ -189,7 +188,7 @@ Example:
 On the UI, when indicating liquidity, by default will indicate the liquidity in 10 separate orders spaced evenly apart. To change the number of orders indicated, you can use the `numOrdersIndicated` setting.
 
 Example:
-```
+```json
 "ETH-USDC": {
     "mode": "pricefeed",
     "side": "b",
@@ -202,4 +201,49 @@ Example:
     "active": true,
     "numOrdersIndicated": 5
 }
+```
+
+## Vaults
+
+Vaults offer a oportunity for users to deposit assets to a Vault contract. Each Vault has a manager that can market make for that Vault. The profits from that will be shared between all depositors. For this first version (V0) only ZigZag will be allowed to operate a Vault. Later we will add public Vaults.
+
+Settings:
+- address: On this address the Vault code is deployed
+- depositFee/withdrawFee: Fees that get colleted at deposit or withdraw. These are shared between all depositors.
+- initialPrice: Used on edge cases, eg. initial deposit.
+- depositTokens: List of all tokens in that pool:
+  - priceFeedPrimary/priceFeedSecondary: Its nessesary to add a price feed for every token in that pool.
+  - active: If true used are allowed to deposit that token to the pool in exchange for LP tokens.
+
+While using pools, the `ethPrivKey` needs to be the private key of the vault manager. He will sign orders for that vault. The marketmaking settings are the same as with a normal market maker.
+
+```json
+"vault": {
+  "address": "0x341fe..32b",
+  "depositFee": 0,
+  "withdrawFee": 0.02,
+  "initialPrice": 1,
+  "depositTokens": {
+    "USDC": {
+      "priceFeedPrimary": "cryptowatch:61633",
+      "priceFeedSecondary": null,
+      "active": true
+    },
+    "WETH": {
+      "priceFeedPrimary": "cryptowatch:6631",
+      "priceFeedSecondary": null,
+      "active": true
+    },
+    "WBTC": {
+      "priceFeedPrimary": "cryptowatch:92864",
+      "priceFeedSecondary": null,
+      "active": true
+    },
+    "ZZ": {
+      "priceFeedPrimary": "cryptowatch:6631",
+      "priceFeedSecondary": null,
+      "active": true
+    }
+  }
+},
 ```
