@@ -604,6 +604,7 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
         const LPPriceInKind = trueLPTokenValue / tokenPrice;
 
         const amountDeposit = ethers.utils.formatUnits(BALANCES[VAULT_TOKEN_SYMBOL].value, VAULT_DECIMALS);
+        if (!amountDeposit) return;
         const depositLPOrder = await getOrderCalldata(
           market,
           's',
@@ -614,6 +615,7 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
         if (depositLPOrder) LPOrders.push(depositLPOrder);
 
         const amountWithdraw = ethers.utils.formatUnits(BALANCES[token].value, tokenInfo.decimals);
+        if (!amountWithdraw) return;
         const withdrawPrice = LPPriceInKind * (1 - VAULT_WITHDRAW_FEE);
         const withdrawLPOrder = await getOrderCalldata(
           market,
