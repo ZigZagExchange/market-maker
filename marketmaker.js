@@ -37,11 +37,11 @@ for (let marketId in MM_CONFIG.pairs) {
 }
 console.log("ACTIVE PAIRS", activePairs);
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
-const VAULT = MM_CONFIG.vault.address;
-const VAULT_DEPOSIT_TOKENS = Object.keys(MM_CONFIG.vault.depositTokens);
-const VAULT_DEPOSIT_FEE = MM_CONFIG.vault.depositFee || 0.01; // default != 0 to prevent arb
-const VAULT_WITHDRAW_FEE = MM_CONFIG.vault.withdrawFee || 0.01; // default != 0 to prevent arb
-const VAULT_INITIAL_PRICE = MM_CONFIG.vault.initialPrice || 1;
+const VAULT = MM_CONFIG.vault && MM_CONFIG.vault.address;
+const VAULT_DEPOSIT_TOKENS = VAULT ? Object.keys(MM_CONFIG.vault.depositTokens) : [];
+const VAULT_DEPOSIT_FEE = VAULT ? MM_CONFIG.vault.depositFee : 0.01; // default != 0 to prevent arb
+const VAULT_WITHDRAW_FEE = VAULT ? MM_CONFIG.vault.withdrawFee : 0.01; // default != 0 to prevent arb
+const VAULT_INITIAL_PRICE = VAULT ? MM_CONFIG.vault.initialPrice : 1;
 
 if (VAULT && !VAULT_DEPOSIT_TOKENS) {
   throw new Error('vault need deposit token list')
@@ -66,11 +66,11 @@ const pKey = MM_CONFIG.ethPrivKey
   ? MM_CONFIG.ethPrivKey
   : process.env.ETH_PRIVKEY;
 const WALLET = new ethers.Wallet(pKey, rollupProvider).connect(rollupProvider);
-const VAULT_CONTRACT = new ethers.Contract(VAULT, VAULTABI, WALLET);
-const [VAULT_TOKEN_SYMBOL, VAULT_DECIMALS] = await Promise.all([
+const VAULT_CONTRACT = VAULT && new ethers.Contract(VAULT, VAULTABI, WALLET);
+const [VAULT_TOKEN_SYMBOL, VAULT_DECIMALS] = VAULT ? await Promise.all([
   VAULT_CONTRACT.symbol(),
   VAULT_CONTRACT.decimals()
-]);
+]) : [0,0];
 
 
 // Start price feeds
@@ -96,7 +96,7 @@ function onWsOpen() {
     }
   }
 
-  for (let depositToken in MM_CONFIG.vault.depositTokens) {
+  for (let depositToken in VAULT_DEPOSIT_TOKENS) {
     const market = `${VAULT_TOKEN_SYMBOL}-${depositToken}`;
     MY_ORDERS[market] = [];
     if (MM_CONFIG.vault.depositTokens[depositToken].active) {
@@ -261,7 +261,7 @@ async function setupPriceFeeds() {
   }
 
   if (VAULT_DEPOSIT_TOKENS) {
-    for (let token in MM_CONFIG.vault.depositTokens) {
+    for (let token in VAULT_DEPOSIT_TOKENS) {
       const depositConfig = MM_CONFIG.vault.depositTokens[token];
 
       // parse keys to lower case to match later PRICE_FEED keys
@@ -719,54 +719,54 @@ async function getOrderCalldata(
 
   const userAccount = await getMMBotAccount();
   let domain, Order, types;
-  if (Number(marketInfo.contractVersion) == 2.0) {
-    // size check
-    if (makerVolumeFeeBN.gte(takerVolumeFeeBN)) {
-      balanceBN = balanceBN.sub(makerVolumeFeeBN);
-    } else {
-      balanceBN = balanceBN.sub(takerVolumeFeeBN);
-    }
 
-    if (balanceBN.lte(0)) return null;
-
-    const delta = sellAmountBN.mul("100000").div(balanceBN).toNumber();
-    if (delta > 100100) {
-      // 100.1 %
-      throw new Error(`Amount exceeds balance.`);
-    }
-    // prevent dust issues
-    if (delta > 99990) {
-      // 99.9 %
-      sellAmountBN = balanceBN;
-      buyAmountBN = buyAmountBN.mul(100000).div(delta);
-    }
-    Order = {
-      user: userAccount,
-      sellToken,
-      buyToken,
-      sellAmount: sellAmountBN.toString(),
-      buyAmount: buyAmountBN.toString(),
-      expirationTimeSeconds: expirationTimeSeconds.toFixed(0),
-    };
-
-    domain = {
-      name: "ZigZag",
-      version: "2.0",
-      chainId: CHAIN_ID,
-      verifyingContract: marketInfo.exchangeAddress,
-    };
-
-    types = {
-      Order: [
-        { name: "user", type: "address" },
-        { name: "sellToken", type: "address" },
-        { name: "buyToken", type: "address" },
-        { name: "sellAmount", type: "uint256" },
-        { name: "buyAmount", type: "uint256" },
-        { name: "expirationTimeSeconds", type: "uint256" },
-      ],
-    };
+  // size check
+  if (makerVolumeFeeBN.gte(takerVolumeFeeBN)) {
+    balanceBN = balanceBN.sub(makerVolumeFeeBN);
+  } else {
+    balanceBN = balanceBN.sub(takerVolumeFeeBN);
   }
+
+  if (balanceBN.lte(0)) return null;
+
+  const delta = sellAmountBN.mul("100000").div(balanceBN).toNumber();
+  if (delta > 100100) {
+    // 100.1 %
+    throw new Error(`Amount exceeds balance.`);
+  }
+  // prevent dust issues
+  if (delta > 99990) {
+    // 99.9 %
+    sellAmountBN = balanceBN;
+    buyAmountBN = buyAmountBN.mul(100000).div(delta);
+  }
+  Order = {
+    user: userAccount,
+    sellToken,
+    buyToken,
+    sellAmount: sellAmountBN.toString(),
+    buyAmount: buyAmountBN.toString(),
+    expirationTimeSeconds: expirationTimeSeconds.toFixed(0),
+  };
+
+  domain = {
+    name: "ZigZag",
+    version: marketInfo.contractVersion.toString(),
+    chainId: CHAIN_ID,
+    verifyingContract: marketInfo.exchangeAddress,
+  };
+
+  types = {
+    Order: [
+      { name: "user", type: "address" },
+      { name: "sellToken", type: "address" },
+      { name: "buyToken", type: "address" },
+      { name: "sellAmount", type: "uint256" },
+      { name: "buyAmount", type: "uint256" },
+      { name: "expirationTimeSeconds", type: "uint256" },
+    ],
+  };
+  
 
   const signature = await WALLET._signTypedData(domain, types, Order);
 
