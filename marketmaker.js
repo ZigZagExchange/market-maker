@@ -70,7 +70,7 @@ const VAULT_CONTRACT = VAULT && new ethers.Contract(VAULT, VAULTABI, WALLET);
 const [VAULT_TOKEN_SYMBOL, VAULT_DECIMALS] = VAULT ? await Promise.all([
   VAULT_CONTRACT.symbol(),
   VAULT_CONTRACT.decimals()
-]) : [0,0];
+]) : [0, 0];
 
 
 // Start price feeds
@@ -96,14 +96,14 @@ function onWsOpen() {
     }
   }
 
-  for (let depositToken in VAULT_DEPOSIT_TOKENS) {
+  VAULT_DEPOSIT_TOKENS.forEach(depositToken => {
     const market = `${VAULT_TOKEN_SYMBOL}-${depositToken}`;
     MY_ORDERS[market] = [];
     if (MM_CONFIG.vault.depositTokens[depositToken].active) {
       const msg = { op: "subscribemarket", args: [CHAIN_ID, market] };
       zigzagws.send(JSON.stringify(msg));
     }
-  }
+  })
 }
 
 function onWsClose() {
@@ -260,23 +260,21 @@ async function setupPriceFeeds() {
     }
   }
 
-  if (VAULT_DEPOSIT_TOKENS) {
-    for (let token in VAULT_DEPOSIT_TOKENS) {
-      const depositConfig = MM_CONFIG.vault.depositTokens[token];
+  VAULT_DEPOSIT_TOKENS.forEach(depositToken => {
+    const depositConfig = MM_CONFIG.vault.depositTokens[depositToken];
 
-      // parse keys to lower case to match later PRICE_FEED keys
-      if (depositConfig.priceFeedPrimary) {
-        const feed = depositConfig.priceFeedPrimary.toLowerCase();
-        _startFeed(feed);
-        MM_CONFIG.vault.depositTokens[token].priceFeedPrimary = feed;
-      }
-      if (depositConfig.priceFeedSecondary) {
-        const feed = depositConfig.priceFeedSecondary.toLowerCase();
-        _startFeed(feed);
-        MM_CONFIG.vault.depositTokens[token].priceFeedSecondary = feed;
-      }
+    // parse keys to lower case to match later PRICE_FEED keys
+    if (depositConfig.priceFeedPrimary) {
+      const feed = depositConfig.priceFeedPrimary.toLowerCase();
+      _startFeed(feed);
+      MM_CONFIG.vault.depositTokens[depositToken].priceFeedPrimary = feed;
     }
-  }
+    if (depositConfig.priceFeedSecondary) {
+      const feed = depositConfig.priceFeedSecondary.toLowerCase();
+      _startFeed(feed);
+      MM_CONFIG.vault.depositTokens[depositToken].priceFeedSecondary = feed;
+    }
+  })
 
   if (chainlink.length > 0) await chainlinkSetup(chainlink);
   if (cryptowatch.length > 0) await cryptowatchWsSetup(cryptowatch);
@@ -766,7 +764,7 @@ async function getOrderCalldata(
       { name: "expirationTimeSeconds", type: "uint256" },
     ],
   };
-  
+
 
   const signature = await WALLET._signTypedData(domain, types, Order);
 
