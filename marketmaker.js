@@ -12,7 +12,7 @@ const BALANCES = {};
 const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
-const MY_ORDERS = {};
+const TOKEN_INFO = {};
 
 let uniswap_error_counter = 0;
 let chainlink_error_counter = 0;
@@ -37,13 +37,13 @@ for (let marketId in MM_CONFIG.pairs) {
 }
 console.log("ACTIVE PAIRS", activePairs);
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
-const VAULT = MM_CONFIG.vault && MM_CONFIG.vault.address;
-const VAULT_DEPOSIT_TOKENS = VAULT ? Object.keys(MM_CONFIG.vault.depositTokens) : [];
-const VAULT_DEPOSIT_FEE = VAULT ? MM_CONFIG.vault.depositFee : 0.01; // default != 0 to prevent arb
-const VAULT_WITHDRAW_FEE = VAULT ? MM_CONFIG.vault.withdrawFee : 0.01; // default != 0 to prevent arb
-const VAULT_INITIAL_PRICE = VAULT ? MM_CONFIG.vault.initialPrice : 1;
+const VAULT_TOKEN_ADDRESS = MM_CONFIG.vault && MM_CONFIG.vault.address;
+const VAULT_DEPOSIT_TOKENS = VAULT_TOKEN_ADDRESS ? Object.keys(MM_CONFIG.vault.depositTokens) : [];
+const VAULT_DEPOSIT_FEE = VAULT_TOKEN_ADDRESS ? MM_CONFIG.vault.depositFee : 0.01; // default != 0 to prevent arb
+const VAULT_WITHDRAW_FEE = VAULT_TOKEN_ADDRESS ? MM_CONFIG.vault.withdrawFee : 0.01; // default != 0 to prevent arb
+const VAULT_INITIAL_PRICE = VAULT_TOKEN_ADDRESS ? MM_CONFIG.vault.initialPrice : 1;
 
-if (VAULT && !VAULT_DEPOSIT_TOKENS) {
+if (VAULT_TOKEN_ADDRESS && !VAULT_DEPOSIT_TOKENS) {
   throw new Error('vault need deposit token list')
 }
 
@@ -66,96 +66,40 @@ const pKey = MM_CONFIG.ethPrivKey
   ? MM_CONFIG.ethPrivKey
   : process.env.ETH_PRIVKEY;
 const WALLET = new ethers.Wallet(pKey, rollupProvider).connect(rollupProvider);
-const VAULT_CONTRACT = VAULT && new ethers.Contract(VAULT, VAULTABI, WALLET);
-const [VAULT_TOKEN_SYMBOL, VAULT_DECIMALS] = VAULT ? await Promise.all([
-  VAULT_CONTRACT.symbol(),
+const VAULT_CONTRACT = VAULT_TOKEN_ADDRESS && new ethers.Contract(VAULT_TOKEN_ADDRESS, VAULTABI, WALLET);
+const [VAULT_DECIMALS] = VAULT_TOKEN_ADDRESS ? await Promise.all([
   VAULT_CONTRACT.decimals()
 ]) : [0, 0];
 
 
 // Start price feeds
 await setupPriceFeeds();
+await getTokenInfo(activePairs);
 
 // Update account state loop
-setTimeout(getBalances, 5000);
+setInterval(getBalances, 5000);
+setInterval(sendOrders, 2000); 
 
-let sendOrdersInterval;
-let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
-zigzagws.on("open", onWsOpen);
-zigzagws.on("close", onWsClose);
-zigzagws.on("error", console.error);
-
-function onWsOpen() {
-  zigzagws.on("message", handleMessage);
-  sendOrdersInterval = setInterval(sendOrders, 7000);
-  for (let market in MM_CONFIG.pairs) {
-    MY_ORDERS[market] = [];
-    if (MM_CONFIG.pairs[market].active) {
-      const msg = { op: "subscribemarket", args: [CHAIN_ID, market] };
-      zigzagws.send(JSON.stringify(msg));
-    }
-  }
-
-  VAULT_DEPOSIT_TOKENS.forEach(depositToken => {
-    const market = `${VAULT_TOKEN_SYMBOL}-${depositToken}`;
-    MY_ORDERS[market] = [];
-    if (MM_CONFIG.vault.depositTokens[depositToken].active) {
-      const msg = { op: "subscribemarket", args: [CHAIN_ID, market] };
-      zigzagws.send(JSON.stringify(msg));
-    }
-  })
-}
-
-function onWsClose() {
-  console.log("Websocket closed. Restarting");
-  setTimeout(() => {
-    clearInterval(sendOrdersInterval);
-    zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
-    zigzagws.on("open", onWsOpen);
-    zigzagws.on("close", onWsClose);
-    zigzagws.on("error", console.error);
-  }, 5000);
-}
-
-async function handleMessage(json) {
-  const msg = JSON.parse(json);
-  if (
-    ![
-      "fills",
-      "orders",
-      "lastprice",
-      "liquidity2",
-      "fillstatus",
-      "marketinfo",
-      "error",
-    ].includes(msg.op)
-  )
-    console.log(json.toString());
-  switch (msg.op) {
-    case "error":
-      console.log(msg);
-      break;
-    case "userorderack":
-      const order = msg.args;
-      const orderMarket = order[2];
-      MY_ORDERS[orderMarket].push(order);
-      break;
-    case "marketinfo":
-      const marketInfo = msg.args[0];
-      const marketId = marketInfo.alias;
-      if (!marketId) break;
-      let oldBaseFee = "N/A",
-        oldQuoteFee = "N/A";
-      try {
-        oldBaseFee = MARKETS[marketId].baseFee;
-        oldQuoteFee = MARKETS[marketId].quoteFee;
-      } catch (e) {
-        // pass, no old marketInfo
+async function getTokenInfo(activePairs) {
+  for(let i = 0; i < activePairs.length; i++) {
+    const pair = activePairs[i];
+    const tokens = pair.split('-');
+    for(let j = 0; j < 2; j++) {
+      const tokenAddress = tokens[j];
+      if (TOKEN_INFO[tokenAddress]) continue
+      const contract = new ethers.Contract(tokenAddress, ERC20ABI, rollupProvider);
+      const [decimalsRes, nameRes, symbolRes] = await Promise.all([
+        contract.decimals(),
+        contract.name(),
+        contract.symbol()
+      ]);
+      TOKEN_INFO[tokenAddress] = {
+        address: tokenAddress,
+        decimals: decimalsRes,
+        name: nameRes,
+        symbol: symbolRes
       }
-      MARKETS[marketId] = marketInfo;
-      break;
-    default:
-      break;
+    }
   }
 }
 
@@ -476,10 +420,7 @@ async function uniswapV3Update() {
 }
 
 async function sendOrders(pairs = MM_CONFIG.pairs) {
-  // update balances before placing new order
-  await getBalances();
-
-  const expires = ((Date.now() / 1000) | 0) + 15; // 15s expiry
+  const expires = ((Date.now() / 1000) | 0) + 20; // 15s expiry
   for (const marketId in pairs) {
     const mmConfig = pairs[marketId];
     if (!mmConfig || !mmConfig.active) continue;
@@ -492,23 +433,25 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
       continue;
     }
 
-    const marketInfo = MARKETS[marketId];
-    if (!marketInfo) continue;
+    const [baseTokenAddress, quoteTokenAddress] = marketId.split('-')
+    const baseTokenInfo = TOKEN_INFO[baseTokenAddress]
+    const quoteTokenInfo = TOKEN_INFO[quoteTokenAddress]
+    if (!baseTokenInfo || !quoteTokenInfo) continue;
 
     const midPrice = mmConfig.invert ? 1 / price : price;
     if (!midPrice) continue;
 
     const side = mmConfig.side || "d";
-    const maxBaseBalance = BALANCES[marketInfo.baseAsset.symbol].value;
-    const maxQuoteBalance = BALANCES[marketInfo.quoteAsset.symbol].value;
-    const baseBalance = maxBaseBalance / 10 ** marketInfo.baseAsset.decimals;
-    const quoteBalance = maxQuoteBalance / 10 ** marketInfo.quoteAsset.decimals;
+    const maxBaseBalance = BALANCES[baseTokenAddress].value;
+    const maxQuoteBalance = BALANCES[quoteTokenAddress].value;
+    const baseBalance = maxBaseBalance / 10 ** baseTokenInfo.decimals;
+    const quoteBalance = maxQuoteBalance / 10 ** quoteTokenInfo.decimals;
     const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
     const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
 
     // dont do splits if under 1000 USD
-    const usdBaseBalance = baseBalance * marketInfo.baseAsset.usdPrice;
-    const usdQuoteBalance = quoteBalance * marketInfo.quoteAsset.usdPrice;
+    const usdBaseBalance = baseBalance * baseTokenInfo.usdPrice;
+    const usdQuoteBalance = quoteBalance * quoteTokenInfo.usdPrice;
     let buySplits =
       usdQuoteBalance && usdQuoteBalance < 1000
         ? 1
@@ -531,14 +474,13 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
           mmConfig.minSpread -
           (mmConfig.slippageRate * maxBuySize * i) / buySplits);
       if (["b", "d"].includes(side)) {
-        const order = await getOrderCalldata(
+        signAndSendOrder(
           marketId,
           "b",
           buyPrice,
-          maxBuySize / buySplits - marketInfo.baseFee,
+          maxBuySize / buySplits,
           expires
         );
-        if (order) orderArray.push(order);
       }
     }
     for (let i = 1; i <= sellSplits; i++) {
@@ -548,100 +490,59 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
           mmConfig.minSpread +
           (mmConfig.slippageRate * maxSellSize * i) / sellSplits);
       if (["s", "d"].includes(side)) {
-        const order = await getOrderCalldata(
+        signAndSendOrder(
           marketId,
           "s",
           sellPrice,
-          maxSellSize / sellSplits - marketInfo.baseFee,
+          maxSellSize / sellSplits,
           expires
         );
-        if (order) orderArray.push(order);
       }
-    }
-
-    // sign all orders to be canceled
-    const cancelOrderArray = [];
-    const result = MY_ORDERS[marketId].map(async (order) => {
-      cancelOrderArray.push(await getCancelOrderEntry(order));
-    });
-    await Promise.all(result);
-
-    // clear all orders, they either failed to cancel or got canceld
-    MY_ORDERS[marketId] = [];
-
-    if (orderArray.length === 0) return;
-
-    zigzagws.send(
-      JSON.stringify({
-        op: "submitorder4",
-        args: [CHAIN_ID, marketId, orderArray, cancelOrderArray],
-      })
-    );
+    }    
   }
 
-  if (VAULT) {
+  if (VAULT_TOKEN_ADDRESS) {
     try {
-      const LPOrders = []
       const usdHoldings = await _getHoldingsInUSD();
       const LPTokenDistributedBN = await VAULT_CONTRACT.circulatingSupply();
       const LPTokenDistributed = Number(ethers.utils.formatUnits(LPTokenDistributedBN, VAULT_DECIMALS));
       const trueLPTokenValue = LPTokenDistributed ? usdHoldings / LPTokenDistributed : VAULT_INITIAL_PRICE;
 
       // generate LP orders for each valid token
-      const result = VAULT_DEPOSIT_TOKENS.map(async (token) => {
+      const result = VAULT_DEPOSIT_TOKENS.map(async (tokenAddress) => {
         // only show orders for active pairs
-        if (!MM_CONFIG.vault.depositTokens[token].active) return;
-        const priceFeedKey = MM_CONFIG.vault.depositTokens[token].priceFeedPrimary;
+        if (!MM_CONFIG.vault.depositTokens[tokenAddress].active) return;
+        const priceFeedKey = MM_CONFIG.vault.depositTokens[tokenAddress].priceFeedPrimary;
 
-        const market = `${VAULT_TOKEN_SYMBOL}-${token}`;
-        const tokenInfo = getCurrencyInfo(token);
+        const market = `${VAULT_TOKEN_ADDRESS}-${tokenAddress}`;
+        const tokenInfo = TOKEN_INFO[tokenAddress];
         if (!tokenInfo) return;
 
         // calculate the LP token price for this token
         const tokenPrice = getValidatedPriceDepositToken(token)
         const LPPriceInKind = trueLPTokenValue / tokenPrice;
 
-        const amountDeposit = ethers.utils.formatUnits(BALANCES[VAULT_TOKEN_SYMBOL].value, VAULT_DECIMALS);
+        const amountDeposit = ethers.utils.formatUnits(BALANCES[VAULT_TOKEN_ADDRESS].value, VAULT_DECIMALS);
         if (!amountDeposit) return;
-        const depositLPOrder = await getOrderCalldata(
+        signAndSendOrder(
           market,
           's',
           LPPriceInKind * (1 + VAULT_DEPOSIT_FEE),
           amountDeposit,
           expires
         );
-        if (depositLPOrder) LPOrders.push(depositLPOrder);
 
         const amountWithdraw = ethers.utils.formatUnits(BALANCES[token].value, tokenInfo.decimals);
         if (!amountWithdraw) return;
         const withdrawPrice = LPPriceInKind * (1 - VAULT_WITHDRAW_FEE);
-        const withdrawLPOrder = await getOrderCalldata(
+        signAndSendOrder(
           market,
           'b',
           withdrawPrice,
           amountWithdraw / withdrawPrice,
           expires
         );
-        if (withdrawLPOrder) LPOrders.push(withdrawLPOrder);
-
-        // sign all orders to be canceled
-        const cancelOrderArray = [];
-        const result = MY_ORDERS[market].map(async (order) => {
-          cancelOrderArray.push(await getCancelOrderEntry(order));
-        });
-        await Promise.all(result);
-
-        // clear all orders, they either failed to cancel or got canceld
-        MY_ORDERS[market] = [];
-
-        zigzagws.send(
-          JSON.stringify({
-            op: "submitorder4",
-            args: [CHAIN_ID, market, LPOrders, cancelOrderArray],
-          })
-        );
       });
-
       await Promise.all(result);
     } catch (e) {
       console.log(`Could not send LP token offers: ${e.message}`);
@@ -650,70 +551,70 @@ async function sendOrders(pairs = MM_CONFIG.pairs) {
 }
 
 async function _getHoldingsInUSD() {
-  const tokens = Object.keys(BALANCES);
+  const tokenAddresses = Object.keys(BALANCES);
   let usdHoldings = 0;
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
+    const tokenAddress = tokenAddresses[i];
 
     // dont count the minted, but not distributed LP tokens
-    if (token === VAULT_TOKEN_SYMBOL) continue;
+    if (tokenAddress === VAULT_TOKEN_ADDRESS) continue;
 
-    const tokenInfo = getCurrencyInfo(token);
+    const tokenInfo = TOKEN_INFO[tokenAddress];
     if (!tokenInfo) continue;
 
-    const amount = ethers.utils.formatUnits(BALANCES[token].value.toString(), tokenInfo.decimals);
-    const tokenPrice = getValidatedPriceDepositToken(token);
+    const amount = ethers.utils.formatUnits(BALANCES[tokenAddress].value.toString(), tokenInfo.decimals);
+    const tokenPrice = getValidatedPriceDepositToken(tokenAddress);
     usdHoldings += amount * tokenPrice;
   }
 
   return usdHoldings;
 }
 
-async function getOrderCalldata(
+async function signAndSendOrder(
   marketId,
   side,
   price,
   size,
   expirationTimeSeconds
 ) {
-  const marketInfo = MARKETS[marketId];
-  if (!marketInfo) return null;
+  const [baseTokenAddress, quoteTokenAddress] = marketId.split('-')
+  const baseTokenInfo = TOKEN_INFO[baseTokenAddress]
+  const quoteTokenInfo = TOKEN_INFO[quoteTokenAddress]
+  if (!baseTokenInfo || !quoteTokenInfo) return
+
   const baseAmount = size;
   const quoteAmount = size * price;
 
-  if (baseAmount < marketInfo.baseFee || quoteAmount < marketInfo.quoteFee)
-    return;
   const baseAmountBN = ethers.utils.parseUnits(
-    Number(baseAmount).toFixed(marketInfo.baseAsset.decimals),
-    marketInfo.baseAsset.decimals
+    Number(baseAmount).toFixed(baseTokenInfo.decimals),
+    baseTokenInfo.decimals
   );
   const quoteAmountBN = ethers.utils.parseUnits(
-    Number(quoteAmount).toFixed(marketInfo.quoteAsset.decimals),
-    marketInfo.quoteAsset.decimals
+    Number(quoteAmount).toFixed(quoteTokenInfo.decimals),
+    quoteTokenInfo.decimals
   );
 
-  const [baseToken, quoteToken] = marketId.split("-");
   let sellToken, buyToken, sellAmountBN, buyAmountBN, balanceBN;
   if (side === "s") {
-    sellToken = marketInfo.baseAsset.address;
-    buyToken = marketInfo.quoteAsset.address;
+    sellToken = baseTokenInfo.address;
+    buyToken = quoteTokenInfo.address;
     sellAmountBN = baseAmountBN;
     buyAmountBN = quoteAmountBN;
-    balanceBN = BALANCES[baseToken].value;
+    balanceBN = BALANCES[baseTokenAddress].value;
   } else {
-    sellToken = marketInfo.quoteAsset.address;
-    buyToken = marketInfo.baseAsset.address;
+    sellToken = quoteTokenInfo.address;
+    buyToken = baseTokenInfo.address;
     sellAmountBN = quoteAmountBN;
     buyAmountBN = baseAmountBN;
-    balanceBN = BALANCES[quoteToken].value;
+    balanceBN = BALANCES[quoteTokenAddress].value;
   }
 
   const makerVolumeFeeBN = sellAmountBN
-    .mul(marketInfo.makerVolumeFee * 10000)
-    .div(9999);
+    .mul(0)
+    .div(100);
   const takerVolumeFeeBN = sellAmountBN
-    .mul(marketInfo.takerVolumeFee * 10000)
-    .div(9999);
+    .mul(5)
+    .div(100);
 
   const userAccount = await getMMBotAccount();
   let domain, Order, types;
@@ -728,10 +629,6 @@ async function getOrderCalldata(
   if (balanceBN.lte(0)) return null;
 
   const delta = sellAmountBN.mul("100000").div(balanceBN).toNumber();
-  if (delta > 100100) {
-    // 100.1 %
-    throw new Error(`Amount exceeds balance.`);
-  }
   // prevent dust issues
   if (delta > 99990) {
     // 99.9 %
@@ -749,9 +646,9 @@ async function getOrderCalldata(
 
   domain = {
     name: "ZigZag",
-    version: marketInfo.contractVersion.toString(),
+    version: "2.1",
     chainId: CHAIN_ID,
-    verifyingContract: marketInfo.exchangeAddress,
+    verifyingContract: "0x20e7FCC377CB96805c6Ae8dDE7BB302b344dc42f",
   };
 
   types = {
@@ -765,19 +662,18 @@ async function getOrderCalldata(
     ],
   };
 
-
   const signature = await WALLET._signTypedData(domain, types, Order);
 
-  Order.signature = signature;
-
-  return Order;
-}
-
-async function getCancelOrderEntry(order) {
-  const orderid = order[1];
-  const message = `cancelorder2:${CHAIN_ID}:${orderid}`;
-  const signature = await WALLET.signMessage(message);
-  return [orderid, signature];
+  const res = await fetch(MM_CONFIG.zigzagHttps + "/v1/order", {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      order: Order,
+      signature: signature,
+      user: userAccount
+    })
+  }).then(response => response.json());
+  console.log(res)
 }
 
 function getExchangeAddress() {
@@ -785,73 +681,47 @@ function getExchangeAddress() {
   return marketInfo?.exchangeAddress;
 }
 
-function getCurrencies() {
-  const tickers = new Set();
+function getTokens() {
+  const tokens = new Set();
   activePairs.forEach((pair) => {
-    tickers.add(pair.split("-")[0]);
-    tickers.add(pair.split("-")[1]);
+    tokens.add(pair.split("-")[0]);
+    tokens.add(pair.split("-")[1]);
   });
 
-  if (VAULT) {
-    tickers.add(VAULT_TOKEN_SYMBOL);
+  if (VAULT_TOKEN_ADDRESS) {
+    tokens.add(VAULT_TOKEN_ADDRESS);
     VAULT_DEPOSIT_TOKENS.forEach(depositToken => {
-      tickers.add(depositToken);
+      tokens.add(depositToken);
     });
   }
-  return [...tickers];
+  return [...tokens];
 }
 
 function getPairs() {
   return Object.keys(MARKETS);
 }
 
-function getCurrencyInfo(currency) {
-  if (currency === VAULT_TOKEN_SYMBOL) {
-    return {
-      id: VAULT,
-      address: VAULT,
-      symbol: VAULT_TOKEN_SYMBOL,
-      decimals: VAULT_DECIMALS,
-      usdPrice: 1
-    }
-  }
-
-  const pairs = getPairs();
-  for (let i = 0; i < pairs.length; i++) {
-    const pair = pairs[i];
-    const marketInfo = MARKETS[pair];
-    const baseCurrency = pair.split("-")[0];
-    const quoteCurrency = pair.split("-")[1];
-    if (baseCurrency === currency && marketInfo) {
-      return marketInfo.baseAsset;
-    } else if (quoteCurrency === currency && marketInfo) {
-      return marketInfo.quoteAsset;
-    }
-  }
-  return null;
-}
-
 async function getBalances() {
   const contractAddress = getExchangeAddress();
-  const tokens = getCurrencies();
+  const tokens = getTokens();
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    BALANCES[token] = await getBalanceOfCurrency(token, contractAddress);
+    const tokenAddress = tokens[i];
+    BALANCES[tokenAddress] = await getBalanceOfToken(tokenAddress, contractAddress);
   }
 }
 
-async function getBalanceOfCurrency(token, contractAddress) {
+async function getBalanceOfToken(tokenAddress, contractAddress) {
   const account = await getMMBotAccount();
   let result = { value: 0, allowance: ethers.constants.Zero };
   if (!rollupProvider) return result;
 
   try {
-    if (token === "ETH") {
+    if (tokenAddress === ethers.constants.AddressZero) {
       result.value = await rollupProvider.getBalance(account);
       result.allowance = ethers.constants.MaxUint256;
       return result;
     }
-    const tokenInfo = getCurrencyInfo(token);
+    const tokenInfo = TOKEN_INFO[tokenAddress];
 
     if (!tokenInfo || !tokenInfo.address) return result;
 
@@ -866,7 +736,7 @@ async function getBalanceOfCurrency(token, contractAddress) {
 
       if (result.value.gte(result.allowance)) {
         console.log(`Sending approve for ${tokenInfo.name} - ${tokenInfo.address}`)
-        if (VAULT) {
+        if (VAULT_TOKEN_ADDRESS) {
           await VAULT_CONTRACT.approveToken(tokenInfo.address, contractAddress, ethers.constants.MaxUint256);
         } else {
           await contract.connect(WALLET).approve(contractAddress, ethers.constants.MaxUint256);
@@ -884,5 +754,5 @@ async function getBalanceOfCurrency(token, contractAddress) {
 }
 
 async function getMMBotAccount() {
-  return VAULT ? VAULT : WALLET.getAddress();
+  return VAULT_TOKEN_ADDRESS ? VAULT_TOKEN_ADDRESS : WALLET.getAddress();
 }
