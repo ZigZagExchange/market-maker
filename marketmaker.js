@@ -1,9 +1,10 @@
-import WebSocket from 'ws';
+import WebSocket from "ws";
 import * as zksync from "zksync";
-import ethers from 'ethers';
-import dotenv from 'dotenv';
-import fetch from 'node-fetch';
-import fs from 'fs';
+import ethers from "ethers";
+import dotenv from "dotenv";
+import fetch from "node-fetch";
+import fs from "fs";
+import assert from "assert";
 
 dotenv.config();
 
@@ -15,19 +16,20 @@ const WALLETS = {};
 const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
+const UNISWAP_V3_MULTIHOP_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 const FEE_TOKEN_LIST = [];
 let FEE_TOKEN = null;
 
 let uniswap_error_counter = 0;
+let uniswap_multihop_error_counter = 0;
 let chainlink_error_counter = 0;
 
 // Load MM config
 let MM_CONFIG;
 if (process.env.MM_CONFIG) {
     MM_CONFIG = JSON.parse(process.env.MM_CONFIG);
-}
-else {
+} else {
     const mmConfigFile = fs.readFileSync("config.json", "utf8");
     MM_CONFIG = JSON.parse(mmConfigFile);
 }
@@ -64,25 +66,29 @@ let syncProvider;
 try {
     syncProvider = await zksync.getDefaultProvider(ETH_NETWORK);
     const keys = [];
-    const ethPrivKey = (process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey);
-    if(ethPrivKey && ethPrivKey != "") { keys.push(ethPrivKey);  }
+    const ethPrivKey = process.env.ETH_PRIVKEY || MM_CONFIG.ethPrivKey;
+    if (ethPrivKey && ethPrivKey != "") {
+        keys.push(ethPrivKey);
+    }
     let ethPrivKeys;
     if (process.env.ETH_PRIVKEYS) {
         ethPrivKeys = JSON.parse(process.env.ETH_PRIVKEYS);
-    }
-    else {
+    } else {
         ethPrivKeys = MM_CONFIG.ethPrivKeys;
     }
-    if(ethPrivKeys && ethPrivKeys.length > 0) {
-        ethPrivKeys.forEach( key => {
-            if(key != "" && !keys.includes(key)) {
+    if (ethPrivKeys && ethPrivKeys.length > 0) {
+        ethPrivKeys.forEach((key) => {
+            if (key != "" && !keys.includes(key)) {
                 keys.push(key);
             }
         });
     }
-    for(let i=0; i<keys.length; i++) {
+    for (let i = 0; i < keys.length; i++) {
         let ethWallet = new ethers.Wallet(keys[i]);
-        let syncWallet = await zksync.Wallet.fromEthSigner(ethWallet, syncProvider);
+        let syncWallet = await zksync.Wallet.fromEthSigner(
+            ethWallet,
+            syncProvider
+        );
         if (!(await syncWallet.isSigningKeySet())) {
             console.log("setting sign key");
             const signKeyResult = await syncWallet.setSigningKey({
@@ -94,11 +100,11 @@ try {
         let accountId = await syncWallet.getAccountId();
         let account_state = await syncWallet.getAccountState();
         WALLETS[accountId] = {
-            'ethWallet': ethWallet,
-            'syncWallet': syncWallet,
-            'account_state': account_state,
-            'ORDER_BROADCASTING': false,
-        }
+            ethWallet: ethWallet,
+            syncWallet: syncWallet,
+            account_state: account_state,
+            ORDER_BROADCASTING: false,
+        };
     }
 } catch (e) {
     console.log(e);
@@ -110,47 +116,52 @@ setInterval(updateAccountState, 900000);
 
 let fillOrdersInterval, indicateLiquidityInterval;
 let zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
-zigzagws.on('open', onWsOpen);
-zigzagws.on('close', onWsClose);
-zigzagws.on('error', console.error);
+zigzagws.on("open", onWsOpen);
+zigzagws.on("close", onWsClose);
+zigzagws.on("error", console.error);
 
 function onWsOpen() {
-    zigzagws.on('message', handleMessage);
+    zigzagws.on("message", handleMessage);
     fillOrdersInterval = setInterval(fillOpenOrders, 200);
     indicateLiquidityInterval = setInterval(indicateLiquidity, 5000);
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
-            const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
+            const msg = { op: "subscribemarket", args: [CHAIN_ID, market] };
             zigzagws.send(JSON.stringify(msg));
         }
     }
 }
 
-function onWsClose () {
+function onWsClose() {
     console.log("Websocket closed. Restarting");
     setTimeout(() => {
-        clearInterval(fillOrdersInterval)
-        clearInterval(indicateLiquidityInterval)
+        clearInterval(fillOrdersInterval);
+        clearInterval(indicateLiquidityInterval);
         zigzagws = new WebSocket(MM_CONFIG.zigzagWsUrl);
-        zigzagws.on('open', onWsOpen);
-        zigzagws.on('close', onWsClose);
-        zigzagws.on('error', console.error);
+        zigzagws.on("open", onWsOpen);
+        zigzagws.on("close", onWsClose);
+        zigzagws.on("error", console.error);
     }, 5000);
 }
 
 async function handleMessage(json) {
     const msg = JSON.parse(json);
-    if (!(["lastprice", "liquidity2", "fillstatus", "marketinfo"]).includes(msg.op)) console.log(json.toString());
-    switch(msg.op) {
-        case 'error':
+    if (
+        !["lastprice", "liquidity2", "fillstatus", "marketinfo"].includes(
+            msg.op
+        )
+    )
+        console.log(json.toString());
+    switch (msg.op) {
+        case "error":
             const accountId = msg.args?.[1];
-            if(msg.args[0] == 'fillrequest' && accountId) {
-                WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-            }         
+            if (msg.args[0] == "fillrequest" && accountId) {
+                WALLETS[accountId]["ORDER_BROADCASTING"] = false;
+            }
             break;
-        case 'orders':
+        case "orders":
             const orders = msg.args[0];
-            orders.forEach(order => {
+            orders.forEach((order) => {
                 const orderId = order[1];
                 const fillable = isOrderFillable(order);
                 console.log(fillable);
@@ -163,31 +174,43 @@ async function handleMessage(json) {
                     OPEN_ORDERS[orderId] = order;
                 }
             });
-            break
+            break;
         case "userordermatch":
             const chainId = msg.args[0];
             const orderId = msg.args[1];
             const fillOrder = msg.args[3];
             const wallet = WALLETS[fillOrder.accountId];
-            if(!wallet) {
-                console.error("No wallet with this accountId: "+fillOrder.accountId);
-                break
+            if (!wallet) {
+                console.error(
+                    "No wallet with this accountId: " + fillOrder.accountId
+                );
+                break;
             } else {
                 try {
-                    await broadcastFill(chainId, orderId, msg.args[2], fillOrder, wallet);
+                    await broadcastFill(
+                        chainId,
+                        orderId,
+                        msg.args[2],
+                        fillOrder,
+                        wallet
+                    );
                 } catch (e) {
-                    const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'r',null,e.message]]]}
+                    const orderCommitMsg = {
+                        op: "orderstatusupdate",
+                        args: [[[chainId, orderId, "r", null, e.message]]],
+                    };
                     zigzagws.send(JSON.stringify(orderCommitMsg));
                     console.error(e);
                 }
-                wallet['ORDER_BROADCASTING'] = false;
+                wallet["ORDER_BROADCASTING"] = false;
             }
-            break
+            break;
         case "marketinfo":
             const marketInfo = msg.args[0];
-            const marketId  = marketInfo.alias;
-            if(!marketId) break
-            let oldBaseFee = "N/A", oldQuoteFee = "N/A";
+            const marketId = marketInfo.alias;
+            if (!marketId) break;
+            let oldBaseFee = "N/A",
+                oldQuoteFee = "N/A";
             try {
                 oldBaseFee = MARKETS[marketId].baseFee;
                 oldQuoteFee = MARKETS[marketId].quoteFee;
@@ -221,7 +244,7 @@ async function handleMessage(json) {
             }
             break
         default:
-            break
+            break;
     }
 }
 
@@ -230,10 +253,10 @@ function isOrderFillable(order) {
     const marketId = order[2];
     const market = MARKETS[marketId];
     const mmConfig = MM_CONFIG.pairs[marketId];
-    const mmSide = (mmConfig.side) ? mmConfig.side : 'd';
-    if (chainId != CHAIN_ID) return { fillable: false, reason: "badchain" }
-    if (!market) return { fillable: false, reason: "badmarket" }
-    if (!mmConfig.active) return { fillable: false, reason: "inactivemarket" }
+    const mmSide = mmConfig.side ? mmConfig.side : "d";
+    if (chainId != CHAIN_ID) return { fillable: false, reason: "badchain" };
+    if (!market) return { fillable: false, reason: "badmarket" };
+    if (!mmConfig.active) return { fillable: false, reason: "inactivemarket" };
 
     const baseQuantity = order[5];
     const quoteQuantity = order[6];
@@ -247,27 +270,25 @@ function isOrderFillable(order) {
         return { fillable: false, reason: "expired" };
     }
 
-    if (mmSide !== 'd' && mmSide == side) {
+    if (mmSide !== "d" && mmSide == side) {
         return { fillable: false, reason: "badside" };
     }
 
     if (baseQuantity < mmConfig.minSize) {
         return { fillable: false, reason: "badsize" };
-    }
-    else if (baseQuantity > mmConfig.maxSize) {
+    } else if (baseQuantity > mmConfig.maxSize) {
         return { fillable: false, reason: "badsize" };
     }
 
     let quote;
     try {
-      quote = genQuote(chainId, marketId, side, baseQuantity);      
+        quote = genQuote(chainId, marketId, side, baseQuantity);
     } catch (e) {
-        return { fillable: false, reason: e.message }
+        return { fillable: false, reason: e.message };
     }
-    if (side == 's' && price > quote.quotePrice) {
+    if (side == "s" && price > quote.quotePrice) {
         return { fillable: false, reason: "badprice" };
-    }
-    else if (side == 'b' && price < quote.quotePrice) {
+    } else if (side == "b" && price < quote.quotePrice) {
         return { fillable: false, reason: "badprice" };
     }
 
@@ -299,13 +320,13 @@ function isOrderFillable(order) {
 }
 
 function genQuote(chainId, marketId, side, baseQuantity) {
-  const market = MARKETS[marketId];
-  if (CHAIN_ID !== chainId) throw new Error("badchain");
-  if (!market) throw new Error("badmarket");
-  if (!(['b','s']).includes(side)) throw new Error("badside");
-  if (baseQuantity <= 0) throw new Error("badquantity");
+    const market = MARKETS[marketId];
+    if (CHAIN_ID !== chainId) throw new Error("badchain");
+    if (!market) throw new Error("badmarket");
+    if (!["b", "s"].includes(side)) throw new Error("badside");
+    if (baseQuantity <= 0) throw new Error("badquantity");
 
-  validatePriceFeed(marketId);
+    validatePriceFeed(marketId);
 
   const mmConfig = MM_CONFIG.pairs[marketId];
   const mmSide = mmConfig.side || 'd';
@@ -335,8 +356,8 @@ function validatePriceFeed(marketId) {
     const primaryPriceFeedId = mmConfig.priceFeedPrimary;
     const secondaryPriceFeedId = mmConfig.priceFeedSecondary;
 
-    // Constant mode checks    
-    const [mode, price] = primaryPriceFeedId.split(':');
+    // Constant mode checks
+    const [mode, price] = primaryPriceFeedId.split(":");
     if (mode === "constant") {
         if (price > 0) return true;
         else throw new Error("No initPrice available");
@@ -345,7 +366,6 @@ function validatePriceFeed(marketId) {
     // Check if primary price exists
     const primaryPrice = PRICE_FEEDS[primaryPriceFeedId];
     if (!primaryPrice) throw new Error("Primary price feed unavailable");
-
 
     // If there is no secondary price feed, the price auto-validates
     if (!secondaryPriceFeedId) return true;
@@ -357,8 +377,8 @@ function validatePriceFeed(marketId) {
     // If the secondary price feed varies from the primary price feed by more than 1%, assume something is broken
     const percentDiff = Math.abs(primaryPrice - secondaryPrice) / primaryPrice;
     if (percentDiff > 0.03) {
-      console.error("Primary and secondary price feeds do not match!");
-      throw new Error("Circuit breaker triggered");
+        console.error("Primary and secondary price feeds do not match!");
+        throw new Error("Circuit breaker triggered");
     }
 
     return true;
@@ -413,25 +433,26 @@ async function sendFillRequest(orderreceipt, accountId) {
   }
   const fillOrder = await WALLETS[accountId].syncWallet.signOrder(orderDetails);
 
-  // Set wallet flag
-  WALLETS[accountId]['ORDER_BROADCASTING'] = true;
+    // Set wallet flag
+    WALLETS[accountId]["ORDER_BROADCASTING"] = true;
 
-  // ORDER_BROADCASTING should not take longer as 5 sec
-  setTimeout(function() {
-      WALLETS[accountId]['ORDER_BROADCASTING'] = false;
-  }, 5000);
+    // ORDER_BROADCASTING should not take longer as 5 sec
+    setTimeout(function () {
+        WALLETS[accountId]["ORDER_BROADCASTING"] = false;
+    }, 5000);
 
-  const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
-  zigzagws.send(JSON.stringify(resp));
-  rememberOrder(chainId,
-      marketId,
-      orderId, 
-      quote.quotePrice, 
-      sellSymbol,
-      sellQuantity,
-      buySymbol,
-      buyQuantity
-  );
+    const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
+    zigzagws.send(JSON.stringify(resp));
+    rememberOrder(
+        chainId,
+        marketId,
+        orderId,
+        quote.quotePrice,
+        sellSymbol,
+        sellQuantity,
+        buySymbol,
+        buyQuantity
+    );
 }
 
 async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
@@ -439,7 +460,20 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
     const nonce = swapOffer.nonce;
     const userNonce = NONCES[swapOffer.accountId];
     if (nonce <= userNonce) {
-        const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'r',null,"Order failed userNonce check."]]]}
+        const orderCommitMsg = {
+            op: "orderstatusupdate",
+            args: [
+                [
+                    [
+                        chainId,
+                        orderId,
+                        "r",
+                        null,
+                        "Order failed userNonce check.",
+                    ],
+                ],
+            ],
+        };
         zigzagws.send(JSON.stringify(orderCommitMsg));
         return;
     }
@@ -461,12 +495,16 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
         nonce: fillOrder.nonce
     });
     const txHash = swap.txHash.split(":")[1];
-    const txHashMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'b',txHash]]]}
+    const txHashMsg = {
+        op: "orderstatusupdate",
+        args: [[[chainId, orderId, "b", txHash]]],
+    };
     zigzagws.send(JSON.stringify(txHashMsg));
-    console.timeEnd('syncswap' + randInt);
+    console.timeEnd("syncswap" + randInt);
 
-    console.time('receipt' + randInt);
-    let receipt, success = false;
+    console.time("receipt" + randInt);
+    let receipt,
+        success = false;
     try {
         receipt = await swap.awaitReceipt();
         if (receipt.success) {
@@ -477,20 +515,23 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
         receipt = null;
         success = false;
     }
-    console.timeEnd('receipt' + randInt);
-    console.log("Swap broadcast result", {swap, receipt});
+    console.timeEnd("receipt" + randInt);
+    console.log("Swap broadcast result", { swap, receipt });
 
     let newStatus, error;
-    if(success) {
+    if (success) {
         afterFill(chainId, orderId, wallet);
-        newStatus = 'f';
+        newStatus = "f";
         error = null;
-   } else {
-        newStatus = 'r';
+    } else {
+        newStatus = "r";
         error = swap.error.toString();
-   }
+    }
 
-    const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
+    const orderCommitMsg = {
+        op: "orderstatusupdate",
+        args: [[[chainId, orderId, newStatus, txHash, error]]],
+    };
     zigzagws.send(JSON.stringify(orderCommitMsg));
 }
 
@@ -501,27 +542,31 @@ async function fillOpenOrders() {
         if (fillable.fillable) {
             sendFillRequest(order, fillable.walletId);
             delete OPEN_ORDERS[orderId];
-        }else if (![
-            "sending order already",
-            "badprice"
-          ].includes(fillable.reason)) {
+        } else if (
+            !["sending order already", "badprice"].includes(fillable.reason)
+        ) {
             delete OPEN_ORDERS[orderId];
         }
     }
 }
 
 async function setupPriceFeeds() {
-  const cryptowatch = [], chainlink = [], uniswapV3 = [];
+    const cryptowatch = [],
+        chainlink = [],
+        uniswapV3 = [],
+        uniswapV3Multihop = [];
     for (let market in MM_CONFIG.pairs) {
         const pairConfig = MM_CONFIG.pairs[market];
-        if(!pairConfig.active) { continue; }
+        if (!pairConfig.active) {
+            continue;
+        }
         // This is needed to make the price feed backwards compatalbe with old constant mode:
         // "DYDX-USDC": {
         //      "mode": "constant",
-        //      "initPrice": 20,    
-        if(pairConfig.mode == "constant") {
+        //      "initPrice": 20,
+        if (pairConfig.mode == "constant") {
             const initPrice = pairConfig.initPrice;
-            pairConfig['priceFeedPrimary'] = "constant:" + initPrice.toString();
+            pairConfig["priceFeedPrimary"] = "constant:" + initPrice.toString();
         }
         const primaryPriceFeed = pairConfig.priceFeedPrimary;
         const secondaryPriceFeed = pairConfig.priceFeedSecondary;
@@ -540,72 +585,97 @@ async function setupPriceFeeds() {
                 case 'cryptowatch':
                     if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
                     break;
-                case 'chainlink':
-                    if(!chainlink.includes(id)) { chainlink.push(id); }
+                case "chainlink":
+                    if (!chainlink.includes(id)) {
+                        chainlink.push(id);
+                    }
                     break;
-                case 'uniswapv3':
-                    if(!uniswapV3.includes(id)) { uniswapV3.push(id); }
+                case "uniswapv3":
+                    if (!uniswapV3.includes(id)) {
+                        uniswapV3.push(id);
+                    }
                     break;
-                case 'constant':
-                    PRICE_FEEDS['constant:'+id] = parseFloat(id);
+                case "uniswapv3multihop":
+                    if (!uniswapV3Multihop.includes(id)) {
+                        uniswapV3Multihop.push(id);
+                    }
+                    break;
+                case "constant":
+                    PRICE_FEEDS["constant:" + id] = parseFloat(id);
                     break;
                 default:
-                    throw new Error("Price feed provider "+provider+" is not available.")
+                    throw new Error(
+                        "Price feed provider " + provider + " is not available."
+                    );
                     break;
-          }
-      });
-  }
-  if(chainlink.length > 0) await chainlinkSetup(chainlink);
-  if(cryptowatch.length > 0) await cryptowatchWsSetup(cryptowatch);
-  if(uniswapV3.length > 0) await uniswapV3Setup(uniswapV3);
+            }
+        });
+    }
+    if (chainlink.length > 0) await chainlinkSetup(chainlink);
+    if (cryptowatch.length > 0) await cryptowatchWsSetup(cryptowatch);
+    if (uniswapV3.length > 0) await uniswapV3Setup(uniswapV3);
+    if (uniswapV3Multihop.length > 0) await uniswapV3MultihopSetup(uniswapV3Multihop);
 
-  console.log(PRICE_FEEDS);
+    console.log(PRICE_FEEDS);
 }
 
 async function cryptowatchWsSetup(cryptowatchMarketIds) {
     // Set initial prices
-    const cryptowatchApiKey = process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
-    const cryptowatchMarkets = await fetch("https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey).then(r => r.json());
-    const cryptowatchMarketPrices = await fetch("https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey).then(r => r.json());
+    const cryptowatchApiKey =
+        process.env.CRYPTOWATCH_API_KEY || MM_CONFIG.cryptowatchApiKey;
+    const cryptowatchMarkets = await fetch(
+        "https://api.cryptowat.ch/markets?apikey=" + cryptowatchApiKey
+    ).then((r) => r.json());
+    const cryptowatchMarketPrices = await fetch(
+        "https://api.cryptowat.ch/markets/prices?apikey=" + cryptowatchApiKey
+    ).then((r) => r.json());
     for (let i in cryptowatchMarketIds) {
         const cryptowatchMarketId = cryptowatchMarketIds[i];
         try {
-            const cryptowatchMarket = cryptowatchMarkets.result.find(row => row.id == cryptowatchMarketId);
+            const cryptowatchMarket = cryptowatchMarkets.result.find(
+                (row) => row.id == cryptowatchMarketId
+            );
             const exchange = cryptowatchMarket.exchange;
             const pair = cryptowatchMarket.pair;
             const key = `market:${exchange}:${pair}`;
-            PRICE_FEEDS['cryptowatch:'+cryptowatchMarketIds[i]] = cryptowatchMarketPrices.result[key];
+            PRICE_FEEDS["cryptowatch:" + cryptowatchMarketIds[i]] =
+                cryptowatchMarketPrices.result[key];
         } catch (e) {
-            console.error("Could not set price feed for cryptowatch:" + cryptowatchMarketId);
+            console.error(
+                "Could not set price feed for cryptowatch:" +
+                    cryptowatchMarketId
+            );
         }
     }
 
     const subscriptionMsg = {
-        "subscribe": {
-            "subscriptions": []
-        }
-    }
+        subscribe: {
+            subscriptions: [],
+        },
+    };
     for (let i in cryptowatchMarketIds) {
         const cryptowatchMarketId = cryptowatchMarketIds[i];
 
         // first get initial price info
 
         subscriptionMsg.subscribe.subscriptions.push({
-            "streamSubscription": {
-                "resource": `markets:${cryptowatchMarketId}:book:spread`
-            }
-        })
+            streamSubscription: {
+                resource: `markets:${cryptowatchMarketId}:book:spread`,
+            },
+        });
     }
-    let cryptowatch_ws = new WebSocket("wss://stream.cryptowat.ch/connect?apikey=" + cryptowatchApiKey);
-    cryptowatch_ws.on('open', onopen);
-    cryptowatch_ws.on('message', onmessage);
-    cryptowatch_ws.on('close', onclose);
-    cryptowatch_ws.on('error', console.error);
+    let cryptowatch_ws = new WebSocket(
+        "wss://stream.cryptowat.ch/connect?apikey=" + cryptowatchApiKey
+    );
+    cryptowatch_ws.on("open", onopen);
+    cryptowatch_ws.on("message", onmessage);
+    cryptowatch_ws.on("close", onclose);
+    cryptowatch_ws.on("error", console.error);
 
     function onopen() {
         cryptowatch_ws.send(JSON.stringify(subscriptionMsg));
     }
-    function onmessage (data) {
+    function onmessage(data) {
         const msg = JSON.parse(data);
         if (!msg.marketUpdate) return;
 
@@ -615,7 +685,7 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
         let price = ask / 2 + bid / 2;
         PRICE_FEEDS[marketId] = price;
     }
-    function onclose () {
+    function onclose() {
         setTimeout(cryptowatchWsSetup, 5000, cryptowatchMarketIds);
     }
 }
@@ -623,17 +693,28 @@ async function cryptowatchWsSetup(cryptowatchMarketIds) {
 async function chainlinkSetup(chainlinkMarketAddress) {
     const results = chainlinkMarketAddress.map(async (address) => {
         try {
-            const aggregatorV3InterfaceABI = JSON.parse(fs.readFileSync('ABIs/chainlinkV3InterfaceABI.abi'));
-            const provider = new ethers.Contract(address, aggregatorV3InterfaceABI, ethersProvider);
+            const aggregatorV3InterfaceABI = JSON.parse(
+                fs.readFileSync("ABIs/chainlinkV3InterfaceABI.abi")
+            );
+            const provider = new ethers.Contract(
+                address,
+                aggregatorV3InterfaceABI,
+                ethersProvider
+            );
             const decimals = await provider.decimals();
-            const key = 'chainlink:' + address;
+            const key = "chainlink:" + address;
             CHAINLINK_PROVIDERS[key] = [provider, decimals];
 
             // get inital price
             const response = await provider.latestRoundData();
-            PRICE_FEEDS[key] = parseFloat(response.answer) / 10**decimals;
+            PRICE_FEEDS[key] = parseFloat(response.answer) / 10 ** decimals;
         } catch (e) {
-            throw new Error ("Error while setting up chainlink for "+address+", Error: "+e);
+            throw new Error(
+                "Error while setting up chainlink for " +
+                    address +
+                    ", Error: " +
+                    e
+            );
         }
     });
     await Promise.all(results);
@@ -642,17 +723,132 @@ async function chainlinkSetup(chainlinkMarketAddress) {
 
 async function chainlinkUpdate() {
     try {
-        await Promise.all(Object.keys(CHAINLINK_PROVIDERS).map(async (key) => {
-            const [provider, decimals] = CHAINLINK_PROVIDERS[key];
-            const response = await provider.latestRoundData();
-            PRICE_FEEDS[key] = parseFloat(response.answer) / 10**decimals;
-        }));
+        await Promise.all(
+            Object.keys(CHAINLINK_PROVIDERS).map(async (key) => {
+                const [provider, decimals] = CHAINLINK_PROVIDERS[key];
+                const response = await provider.latestRoundData();
+                PRICE_FEEDS[key] = parseFloat(response.answer) / 10 ** decimals;
+            })
+        );
         chainlink_error_counter = 0;
     } catch (err) {
         chainlink_error_counter += 1;
         console.log(`Failed to update chainlink, retry: ${err.message}`);
-        if(chainlink_error_counter > 4) {
-            throw new Error ("Failed to update chainlink since 150 seconds!")
+        if (chainlink_error_counter > 4) {
+            throw new Error("Failed to update chainlink since 150 seconds!");
+        }
+    }
+}
+
+async function uniswapV3MultihopSetup(uniswapV3Address) {
+    const results = uniswapV3Address.map(async (addressesString) => {
+        try {
+            const IUniswapV3PoolABI = JSON.parse(
+                fs.readFileSync("ABIs/IUniswapV3Pool.abi")
+            );
+            const ERC20ABI = JSON.parse(fs.readFileSync("ABIs/ERC20.abi"));
+
+            const addresses = addressesString.split("-");
+            const providers = addresses.map(
+                (address) =>
+                    new ethers.Contract(
+                        address,
+                        IUniswapV3PoolABI,
+                        ethersProvider
+                    )
+            );
+
+            let curToken = null;
+            // Check that the tokens match
+            for(const provider of providers) {
+                if(curToken != null) {
+                    assert(curToken == await provider.token0());
+                }
+                curToken = await provider.token1();
+            }
+
+            let [addressToken0, addressToken1] = await Promise.all([
+                providers[0].token0(),
+                providers[providers.length - 1].token1(),
+            ]);
+
+            const tokenProvier0 = new ethers.Contract(
+                addressToken0,
+                ERC20ABI,
+                ethersProvider
+            );
+            const tokenProvier1 = new ethers.Contract(
+                addressToken1,
+                ERC20ABI,
+                ethersProvider
+            );
+
+            let [decimals0, decimals1] = await Promise.all([
+                tokenProvier0.decimals(),
+                tokenProvier1.decimals(),
+            ]);
+            const decimalsRatio = 10 ** decimals0 / 10 ** decimals1;
+
+            const key = "uniswapv3Multihop:" + addressesString;
+            console.log("Setting uniswap multihop configuration", {
+                key, providers, decimalsRatio
+            })
+            UNISWAP_V3_MULTIHOP_PROVIDERS[key] = [providers, decimalsRatio];
+
+            const price = await calculatePriceMultihop(providers, decimalsRatio);
+            console.log("Setting uniswap multihop price", {
+                price: price.toString()
+            })
+            PRICE_FEEDS[key] = price;
+        } catch (e) {
+            throw new Error(
+                "Error while setting up uniswapV3 for " +
+                    addressesString +
+                    ", Error: " +
+                    e
+            );
+        }
+    });
+    await Promise.all(results);
+    setInterval(uniswapV3MultihopUpdate, 30000);
+}
+
+async function calculatePriceMultihop(providers, decimalsRatio) {
+    const slots = await Promise.all(
+        providers.map((provider) => provider.slot0())
+    );
+    // get inital price
+    const price = slots.reduce((price, slot0) => {
+        const nextPrice =  (price * (slot0.sqrtPriceX96 * slot0.sqrtPriceX96)) / 2 ** 192;
+        console.log({price, slot0, nextPrice});
+        return nextPrice;
+    }, 1);
+    const priceAdjusted = price * decimalsRatio;
+    console.log({price, priceAdjusted, decimalsRatio});
+    return priceAdjusted;
+}
+
+async function uniswapV3MultihopUpdate() {
+    try {
+        await Promise.all(
+            Object.keys(UNISWAP_V3_MULTIHOP_PROVIDERS).map(async (key) => {
+                const [providers, decimalsRatio] = UNISWAP_V3_MULTIHOP_PROVIDERS[key];
+                const newPrice = await calculatePriceMultihop(providers, decimalsRatio);
+                PRICE_FEEDS[key] = newPrice;
+                console.log("Succesfull updated from uniswap", {
+                    newPrice,
+                    key,
+                });
+            })
+        );
+        // reset error counter if successful
+        uniswap_multihop_error_counter = 0;
+    } catch (err) {
+        uniswap_multihop_error_counter += 1;
+        console.log(`Failed to update uniswap, retry: ${err.message}`);
+        console.log(err.message);
+        if (uniswap_multihop_error_counter > 4) {
+            throw new Error("Failed to update uniswap since 150 seconds!");
         }
     }
 }
@@ -660,41 +856,61 @@ async function chainlinkUpdate() {
 async function uniswapV3Setup(uniswapV3Address) {
     const results = uniswapV3Address.map(async (address) => {
         try {
-            const IUniswapV3PoolABI = JSON.parse(fs.readFileSync('ABIs/IUniswapV3Pool.abi'));
-            const ERC20ABI = JSON.parse(fs.readFileSync('ABIs/ERC20.abi'));
-  
-            const provider = new ethers.Contract(address, IUniswapV3PoolABI, ethersProvider);
-            
-            let [
-              slot0,
-              addressToken0,
-              addressToken1
-            ] = await Promise.all ([
-              provider.slot0(),
-              provider.token0(),
-              provider.token1()
+            const IUniswapV3PoolABI = JSON.parse(
+                fs.readFileSync("ABIs/IUniswapV3Pool.abi")
+            );
+            const ERC20ABI = JSON.parse(fs.readFileSync("ABIs/ERC20.abi"));
+
+            const provider = new ethers.Contract(
+                address,
+                IUniswapV3PoolABI,
+                ethersProvider
+            );
+
+            let [slot0, addressToken0, addressToken1] = await Promise.all([
+                provider.slot0(),
+                provider.token0(),
+                provider.token1(),
             ]);
-  
-            const tokenProvier0 = new ethers.Contract(addressToken0, ERC20ABI, ethersProvider);
-            const tokenProvier1 = new ethers.Contract(addressToken1, ERC20ABI, ethersProvider);
-  
-            let [
-              decimals0,
-              decimals1
-            ] = await Promise.all ([
-              tokenProvier0.decimals(),
-              tokenProvier1.decimals()
+
+            const tokenProvier0 = new ethers.Contract(
+                addressToken0,
+                ERC20ABI,
+                ethersProvider
+            );
+            const tokenProvier1 = new ethers.Contract(
+                addressToken1,
+                ERC20ABI,
+                ethersProvider
+            );
+
+            let [decimals0, decimals1] = await Promise.all([
+                tokenProvier0.decimals(),
+                tokenProvier1.decimals(),
             ]);
-  
-            const key = 'uniswapv3:' + address;
-            const decimalsRatio = (10**decimals0 / 10**decimals1);  
+
+            const key = "uniswapv3:" + address;
+            const decimalsRatio = 10 ** decimals0 / 10 ** decimals1;
+            console.log("Setting uniswap configuration", {
+                key, provider, decimalsRatio
+            })
             UNISWAP_V3_PROVIDERS[key] = [provider, decimalsRatio];
 
             // get inital price
-            const price = (slot0.sqrtPriceX96*slot0.sqrtPriceX96*decimalsRatio) / (2**192);
+            const price =
+                (slot0.sqrtPriceX96 * slot0.sqrtPriceX96 * decimalsRatio) /
+                2 ** 192;
+            console.log("Setting uniswap price", {
+                price: price.toString()
+            })
             PRICE_FEEDS[key] = price;
         } catch (e) {
-            throw new Error ("Error while setting up uniswapV3 for "+address+", Error: "+e);
+            throw new Error(
+                "Error while setting up uniswapV3 for " +
+                    address +
+                    ", Error: " +
+                    e
+            );
         }
     });
     await Promise.all(results);
@@ -714,21 +930,23 @@ async function uniswapV3Update() {
         uniswap_error_counter += 1;
         console.log(`Failed to update uniswap, retry: ${err.message}`);
         console.log(err.message);
-        if(uniswap_error_counter > 4) {
-            throw new Error ("Failed to update uniswap since 150 seconds!")
+        if (uniswap_error_counter > 4) {
+            throw new Error("Failed to update uniswap since 150 seconds!");
         }
     }
 }
 
-function indicateLiquidity (pairs = MM_CONFIG.pairs) {
-    for(const marketId in pairs) {
+function indicateLiquidity(pairs = MM_CONFIG.pairs) {
+    for (const marketId in pairs) {
         const mmConfig = pairs[marketId];
-        if(!mmConfig || !mmConfig.active) continue;
+        if (!mmConfig || !mmConfig.active) continue;
 
         try {
             validatePriceFeed(marketId);
-        } catch(e) {
-            console.error("Can not indicateLiquidity ("+marketId+") because: " + e);
+        } catch (e) {
+            console.error(
+                "Can not indicateLiquidity (" + marketId + ") because: " + e
+            );
             continue;
         }
 
@@ -740,13 +958,20 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
             : PRICE_FEEDS[mmConfig.priceFeedPrimary];
         if (!midPrice) continue;
 
-        const expires = (Date.now() / 1000 | 0) + 10; // 10s expiry
-        const side = mmConfig.side || 'd';
+        const expires = ((Date.now() / 1000) | 0) + 10; // 10s expiry
+        const side = mmConfig.side || "d";
 
-        let maxBaseBalance = 0, maxQuoteBalance = 0;
-        Object.keys(WALLETS).forEach(accountId => {
-            const walletBase = WALLETS[accountId]['account_state'].committed.balances[marketInfo.baseAsset.symbol];
-            const walletQuote = WALLETS[accountId]['account_state'].committed.balances[marketInfo.quoteAsset.symbol];
+        let maxBaseBalance = 0,
+            maxQuoteBalance = 0;
+        Object.keys(WALLETS).forEach((accountId) => {
+            const walletBase =
+                WALLETS[accountId]["account_state"].committed.balances[
+                    marketInfo.baseAsset.symbol
+                ];
+            const walletQuote =
+                WALLETS[accountId]["account_state"].committed.balances[
+                    marketInfo.quoteAsset.symbol
+                ];
             if (Number(walletBase) > maxBaseBalance) {
                 maxBaseBalance = walletBase;
             }
@@ -754,8 +979,10 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
                 maxQuoteBalance = walletQuote;
             }
         });
-        const baseBalance = maxBaseBalance / 10**marketInfo.baseAsset.decimals;
-        const quoteBalance = maxQuoteBalance / 10**marketInfo.quoteAsset.decimals;
+        const baseBalance =
+            maxBaseBalance / 10 ** marketInfo.baseAsset.decimals;
+        const quoteBalance =
+            maxQuoteBalance / 10 ** marketInfo.quoteAsset.decimals;
         const maxSellSize = Math.min(baseBalance, mmConfig.maxSize);
         const maxBuySize = Math.min(quoteBalance / midPrice, mmConfig.maxSize);
 
@@ -792,7 +1019,7 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
     }
 }
 
-function cancelLiquidity (chainId, marketId) {
+function cancelLiquidity(chainId, marketId) {
     const msg = { op: "indicateliq2", args: [chainId, marketId, []] };
     try {
         zigzagws.send(JSON.stringify(msg));
@@ -804,18 +1031,22 @@ function cancelLiquidity (chainId, marketId) {
 
 async function afterFill(chainId, orderId, wallet) {
     const order = PAST_ORDER_LIST[orderId];
-    if(!order) { return; }
+    if (!order) {
+        return;
+    }
     const marketId = order.marketId;
     const mmConfig = MM_CONFIG.pairs[marketId];
-    if(!mmConfig) { return; }
+    if (!mmConfig) {
+        return;
+    }
 
     // update account state from order
-    const account_state = wallet['account_state'].committed.balances;
-    const buyTokenParsed = syncProvider.tokenSet.parseToken (
+    const account_state = wallet["account_state"].committed.balances;
+    const buyTokenParsed = syncProvider.tokenSet.parseToken(
         order.buySymbol,
         order.buyQuantity
     );
-    const sellTokenParsed = syncProvider.tokenSet.parseToken (
+    const sellTokenParsed = syncProvider.tokenSet.parseToken(
         order.sellSymbol,
         order.sellQuantity
     );
@@ -828,39 +1059,40 @@ async function afterFill(chainId, orderId, wallet) {
     
     const indicateMarket = {};
     indicateMarket[marketId] = mmConfig;
-    if(mmConfig.delayAfterFill) {
-        let delayAfterFillMinSize
-        if(
+    if (mmConfig.delayAfterFill) {
+        let delayAfterFillMinSize;
+        if (
             !Array.isArray(mmConfig.delayAfterFill) ||
             !mmConfig.delayAfterFill[1]
         ) {
             delayAfterFillMinSize = 0;
         } else {
-            delayAfterFillMinSize = mmConfig.delayAfterFill[1]
+            delayAfterFillMinSize = mmConfig.delayAfterFill[1];
         }
 
-        if(order.baseQuantity > delayAfterFillMinSize)  {
+        if (order.baseQuantity > delayAfterFillMinSize) {
             // no array -> old config
             // or array and buyQuantity over minSize
             mmConfig.active = false;
-            cancelLiquidity (chainId, marketId);
-            console.log(`Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`);
+            cancelLiquidity(chainId, marketId);
+            console.log(
+                `Set ${marketId} passive for ${mmConfig.delayAfterFill} seconds.`
+            );
             setTimeout(() => {
                 mmConfig.active = true;
                 console.log(`Set ${marketId} active.`);
                 indicateLiquidity(indicateMarket);
-            }, mmConfig.delayAfterFill * 1000);   
-        }             
+            }, mmConfig.delayAfterFill * 1000);
+        }
     }
 
     // increaseSpreadAfterFill size might not be set
-    const increaseSpreadAfterFillMinSize = (mmConfig.increaseSpreadAfterFill?.[2]) 
+    const increaseSpreadAfterFillMinSize = mmConfig.increaseSpreadAfterFill?.[2]
         ? mmConfig.increaseSpreadAfterFill[2]
-        : 0
-    if(
+        : 0;
+    if (
         mmConfig.increaseSpreadAfterFill &&
         order.baseQuantity > increaseSpreadAfterFillMinSize
-        
     ) {
         const [spread, time] = mmConfig.increaseSpreadAfterFill;
         mmConfig.minSpread = mmConfig.minSpread + spread;
@@ -874,10 +1106,10 @@ async function afterFill(chainId, orderId, wallet) {
     }
 
     // changeSizeAfterFill size might not be set
-    const changeSizeAfterFillMinSize = (mmConfig.changeSizeAfterFill?.[2]) 
+    const changeSizeAfterFillMinSize = mmConfig.changeSizeAfterFill?.[2]
         ? mmConfig.changeSizeAfterFill[2]
-        : 0
-    if(
+        : 0;
+    if (
         mmConfig.changeSizeAfterFill &&
         order.baseQuantity > changeSizeAfterFillMinSize
     ) {
@@ -887,23 +1119,32 @@ async function afterFill(chainId, orderId, wallet) {
         indicateLiquidity(indicateMarket);
         setTimeout(() => {
             mmConfig.maxSize = mmConfig.maxSize - size;
-            console.log(`Changed ${marketId} maxSize by ${(size* (-1))}.`);
+            console.log(`Changed ${marketId} maxSize by ${size * -1}.`);
             indicateLiquidity(indicateMarket);
         }, time * 1000);
     }
 }
 
-function rememberOrder(chainId, marketId, orderId, price, sellSymbol, sellQuantity, buySymbol, buyQuantity) {
+function rememberOrder(
+    chainId,
+    marketId,
+    orderId,
+    price,
+    sellSymbol,
+    sellQuantity,
+    buySymbol,
+    buyQuantity
+) {
     const timestamp = Date.now() / 1000;
     for (const [key, value] of Object.entries(PAST_ORDER_LIST)) {
-        if (value['expiry'] < timestamp) {
+        if (value["expiry"] < timestamp) {
             delete PAST_ORDER_LIST[key];
         }
     }
 
-    const [baseSymbol, quoteSymbol] = marketId.split('-')
+    const [baseSymbol, quoteSymbol] = marketId.split("-");
     let baseQuantity, quoteQuantity;
-    if(sellSymbol === baseSymbol) {
+    if (sellSymbol === baseSymbol) {
         baseQuantity = sellQuantity;
         quoteQuantity = buyQuantity;
     } else {
@@ -913,28 +1154,27 @@ function rememberOrder(chainId, marketId, orderId, price, sellSymbol, sellQuanti
 
     const expiry = timestamp + 900;
     PAST_ORDER_LIST[orderId] = {
-        'chainId': chainId,
-        'marketId': marketId,
-        'price': price,
-        'baseQuantity': baseQuantity,
-        'quoteQuantity': quoteQuantity,
-        'sellSymbol': sellSymbol,
-        'sellQuantity': sellQuantity,
-        'buySymbol': buySymbol,
-        'buyQuantity': buyQuantity,
-        'expiry':expiry
+        chainId: chainId,
+        marketId: marketId,
+        price: price,
+        baseQuantity: baseQuantity,
+        quoteQuantity: quoteQuantity,
+        sellSymbol: sellSymbol,
+        sellQuantity: sellQuantity,
+        buySymbol: buySymbol,
+        buyQuantity: buyQuantity,
+        expiry: expiry,
     };
 }
 
 async function updateAccountState() {
     try {
-        Object.keys(WALLETS).forEach(accountId => {
-            (WALLETS[accountId]['syncWallet']).getAccountState().then((state) => {
-                WALLETS[accountId]['account_state'] = state;
-            })
+        Object.keys(WALLETS).forEach((accountId) => {
+            WALLETS[accountId]["syncWallet"].getAccountState().then((state) => {
+                WALLETS[accountId]["account_state"] = state;
+            });
         });
-    } catch(err) {
+    } catch (err) {
         // pass
     }
 }
-
