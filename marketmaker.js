@@ -762,7 +762,7 @@ async function uniswapV3MultihopSetup(uniswapV3Address) {
             // Check that the tokens match
             for(const provider of providers) {
                 if(curToken != null) {
-                    assert(curToken == await provider.token0());
+                    assert(curToken == await provider.token0(), "Token path mismatch");
                 }
                 curToken = await provider.token1();
             }
