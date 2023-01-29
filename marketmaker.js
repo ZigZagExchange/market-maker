@@ -592,12 +592,12 @@ async function setupPriceFeeds() {
                     break;
                 case "uniswapv3":
                     if (!uniswapV3.includes(id)) {
-                        uniswapV3.push(id);
+                        uniswapV3.push(id.toLowerCase());
                     }
                     break;
                 case "uniswapv3multihop":
                     if (!uniswapV3Multihop.includes(id)) {
-                        uniswapV3Multihop.push(id);
+                        uniswapV3Multihop.push(id.toLowerCase());
                     }
                     break;
                 case "constant":
@@ -805,7 +805,7 @@ async function uniswapV3MultihopSetup(uniswapV3Address) {
             ]);
             const decimalsRatio = 10 ** decimals0 / 10 ** decimals1;
 
-            const key = "uniswapv3Multihop:" + addressesString;
+            const key = "uniswapv3multihop:" + addressesString;
             UNISWAP_V3_MULTIHOP_PROVIDERS[key] = [providers, decimalsRatio];
 
             const price = await calculatePriceMultihop(
