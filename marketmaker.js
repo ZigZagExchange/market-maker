@@ -788,7 +788,6 @@ async function uniswapV3MultihopSetup(uniswapV3Address) {
                 lastProvider.reverted ? lastProvider.pair.token0() : lastProvider.pair.token1(),
             ]);
 
-            console.log({addressToken0, addressToken1});
             const tokenProvider0 = new ethers.Contract(
                 addressToken0,
                 ERC20ABI,
@@ -804,24 +803,15 @@ async function uniswapV3MultihopSetup(uniswapV3Address) {
                 tokenProvider0.decimals(),
                 tokenProvider1.decimals(),
             ]);
-            console.log({decimals0, decimals1});
             const decimalsRatio = 10 ** decimals0 / 10 ** decimals1;
 
             const key = "uniswapv3Multihop:" + addressesString;
-            console.log("Setting uniswap multihop configuration", {
-                key,
-                providers,
-                decimalsRatio,
-            });
             UNISWAP_V3_MULTIHOP_PROVIDERS[key] = [providers, decimalsRatio];
 
             const price = await calculatePriceMultihop(
                 providers,
                 decimalsRatio
             );
-            console.log("Setting uniswap multihop price", {
-                price: price.toString(),
-            });
             PRICE_FEEDS[key] = price;
         } catch (e) {
             throw new Error(
@@ -848,11 +838,9 @@ async function calculatePriceMultihop(providers, decimalsRatio) {
         const pairPrice = (slot0.sqrtPriceX96 * slot0.sqrtPriceX96);
         const x96Adjustment = 2 ** 192;
         const nextPrice = reverted ? price * x96Adjustment / pairPrice : price * pairPrice / x96Adjustment;
-        console.log("PriceData: ", { price, slot0, nextPrice, pairPrice });
         return nextPrice;
     }, 1);
     const priceAdjusted = price * decimalsRatio;
-    console.log({ price, priceAdjusted, decimalsRatio });
     return priceAdjusted;
 }
 
@@ -867,10 +855,6 @@ async function uniswapV3MultihopUpdate() {
                     decimalsRatio
                 );
                 PRICE_FEEDS[key] = newPrice;
-                console.log("Succesfull updated from uniswap", {
-                    newPrice,
-                    key,
-                });
             })
         );
         // reset error counter if successful
@@ -923,20 +907,12 @@ async function uniswapV3Setup(uniswapV3Address) {
 
             const key = "uniswapv3:" + address;
             const decimalsRatio = 10 ** decimals0 / 10 ** decimals1;
-            console.log("Setting uniswap configuration", {
-                key,
-                provider,
-                decimalsRatio,
-            });
             UNISWAP_V3_PROVIDERS[key] = [provider, decimalsRatio];
 
             // get inital price
             const price =
                 (slot0.sqrtPriceX96 * slot0.sqrtPriceX96 * decimalsRatio) /
                 2 ** 192;
-            console.log("Setting uniswap price", {
-                price: price.toString(),
-            });
             PRICE_FEEDS[key] = price;
         } catch (e) {
             throw new Error(
