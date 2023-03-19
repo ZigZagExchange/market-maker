@@ -912,12 +912,21 @@ async function updateAccountState() {
   }
 }
 
-function sendMessage(msg) {
+async function sendMessage(msg) {
+  let success = false;
+  do {
+    success = await waitForSocketConnection(msg);
+  } while (!success);
+}
+
+async function waitForSocketConnection(msg) {
   if (zigzagws.readyState === 1) {
     if (msg != null) {
       zigzagws.send(msg);
+      return true;
     }
   } else {
-    setTimeout(sendMessage(msg), 5);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    return false;
   }
 }
