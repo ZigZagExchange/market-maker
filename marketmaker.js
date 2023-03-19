@@ -121,7 +121,7 @@ function onWsOpen() {
     for (let market in MM_CONFIG.pairs) {
         if (MM_CONFIG.pairs[market].active) {
             const msg = {op:"subscribemarket", args:[CHAIN_ID, market]};
-            zigzagws.send(JSON.stringify(msg));
+            sendMessage(JSON.stringify(msg));
         }
     }
 }
@@ -177,7 +177,7 @@ async function handleMessage(json) {
                     await broadcastFill(chainId, orderId, msg.args[2], fillOrder, wallet);
                 } catch (e) {
                     const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'r',null,e.message]]]}
-                    zigzagws.send(JSON.stringify(orderCommitMsg));
+                    sendMessage(JSON.stringify(orderCommitMsg));
                     console.error(e);
                 }
                 wallet['ORDER_BROADCASTING'] = false;
@@ -422,7 +422,7 @@ async function sendFillRequest(orderreceipt, accountId) {
   }, 5000);
 
   const resp = { op: "fillrequest", args: [chainId, orderId, fillOrder] };
-  zigzagws.send(JSON.stringify(resp));
+  sendMessage(JSON.stringify(resp));
   rememberOrder(chainId,
       marketId,
       orderId, 
@@ -440,7 +440,7 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
     const userNonce = NONCES[swapOffer.accountId];
     if (nonce <= userNonce) {
         const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'r',null,"Order failed userNonce check."]]]}
-        zigzagws.send(JSON.stringify(orderCommitMsg));
+        sendMessage(JSON.stringify(orderCommitMsg));
         return;
     }
     // select token to match user's fee token
@@ -462,7 +462,7 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
     });
     const txHash = swap.txHash.split(":")[1];
     const txHashMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,'b',txHash]]]}
-    zigzagws.send(JSON.stringify(txHashMsg));
+    sendMessage(JSON.stringify(txHashMsg));
     console.timeEnd('syncswap' + randInt);
 
     console.time('receipt' + randInt);
@@ -491,7 +491,7 @@ async function broadcastFill(chainId, orderId, swapOffer, fillOrder, wallet) {
    }
 
     const orderCommitMsg = {op:"orderstatusupdate", args:[[[chainId,orderId,newStatus,txHash,error]]]}
-    zigzagws.send(JSON.stringify(orderCommitMsg));
+    sendMessage(JSON.stringify(orderCommitMsg));
 }
 
 async function fillOpenOrders() {
@@ -784,7 +784,7 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
 
         const msg = { op: "indicateliq2", args: [CHAIN_ID, marketId, liquidity] };
         try {
-            zigzagws.send(JSON.stringify(msg));
+            sendMessage(JSON.stringify(msg));
         } catch (e) {
             console.error("Could not send liquidity");
             console.error(e);
@@ -795,7 +795,7 @@ function indicateLiquidity (pairs = MM_CONFIG.pairs) {
 function cancelLiquidity (chainId, marketId) {
     const msg = { op: "indicateliq2", args: [chainId, marketId, []] };
     try {
-        zigzagws.send(JSON.stringify(msg));
+        sendMessage(JSON.stringify(msg));
     } catch (e) {
         console.error("Could not send liquidity");
         console.error(e);
@@ -938,3 +938,21 @@ async function updateAccountState() {
     }
 }
 
+async function sendMessage(msg) {
+    let success = false;
+    do {
+        success = await waitForSocketConnection(msg);
+    } while (!success);
+}
+
+async function waitForSocketConnection(msg) {
+    if (zigzagws.readyState === 1) {
+        if (msg != null) {
+            zigzagws.send(msg);
+            return true;
+        }
+    } else {
+        await new Promise(resolve => setTimeout(resolve, 10));
+        return false;
+    }
+}
