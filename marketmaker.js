@@ -47,14 +47,36 @@ console.log("ACTIVE PAIRS", activePairs);
 const CHAIN_ID = parseInt(MM_CONFIG.zigzagChainId);
 const ETH_NETWORK = (CHAIN_ID === 1) ? "mainnet" : "goerli";
 const infureKey = (process.env.infura || MM_CONFIG.infura);
+const ethereumRPC = process.env.infuraUrl || process.env.RPC || process.env.ethereumRPC || MM_CONFIG.infuraUrl || MM_CONFIG.RPC || MM_CONFIG.ethereumRPC;
 let ethersProvider = null;
 if (infureKey) {
   ethersProvider = new ethers.providers.InfuraProvider(
     "mainnet",
     infureKey
   );
+} else if (ethereumRPC) {
+  ethersProvider = new ethers.providers.JsonRpcProvider(ethereumRPC);
 } else {
-  ethersProvider = new ethers.getDefaultProvider("mainnet");
+  console.error(`
+    You did not provider an rpc url with "ethereumRPC" inside your config
+    or with ETHEREUM_RPC in the environment variables.
+    Please add a custom one. There are some providers with free plans.
+    
+    Using a public provider, there is no guarantee that it is stable, for a stable market-maker create a custom RPC.`
+  )
+  ethersProvider = new ethers.providers.JsonRpcProvider('https://eth.llamarpc.com');
+}
+
+const resProvider = await Promise.race([
+  ethersProvider.ready,
+  new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Request timed out')), 10_000)
+  })
+])
+
+// check if provider is working
+if (Number(resProvider.chainId) !== 1) {
+  throw new Error(`Cant connect provider, use "ethereumRPC" in the config to add an ethereumRPC`)
 }
 
 // Start price feeds

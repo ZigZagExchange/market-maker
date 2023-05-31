@@ -6,6 +6,7 @@
     ],
     "zigzagChainId": 1,
     "zigzagWsUrl": "wss://zigzag-exchange.herokuapp.com",
+    "ethereumRPC": "https://eth.llamarpc.com",
     "pairs": {
         "ETH-USDC": {
             "priceFeedPrimary": "cryptowatch:6631",
