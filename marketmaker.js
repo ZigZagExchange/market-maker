@@ -17,6 +17,7 @@ const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 const FEE_TOKEN_LIST = [];
+const MM_FILLS = {};
 let FEE_TOKEN = null;
 
 let uniswap_error_counter = 0;
@@ -242,6 +243,35 @@ async function handleMessage(json) {
               }
             }
             break
+        case "fills":
+            const fills = msg.args[0];
+            fills.forEach(fill => {
+                const account_ids = Object.keys(WALLETS);
+                if (account_ids.includes(fill[9])) {
+                    MM_FILLS[fill[1]] = fill;
+                }
+            });
+            break;
+        case "fillstatus":
+            const updates = msg.args[0];
+            updates.forEach(update => {
+                const fillId = update[1];
+                const fillStatus = update[2];
+                if (MM_FILLS[fillId] && fillStatus == 'f') {
+                    const market = MM_FILLS[fillId][2];
+                    const side = MM_FILLS[fillId][3];
+                    const fillQty = MM_FILLS[fillId][5];
+                    const mmConfig = MM_CONFIG.pairs[market];
+                    if (side === 'b') {
+                        PRICE_FEEDS['independent:' + market] += mmConfig.slippageRate * fillQty;
+                    }
+                    else if (side === 's') {
+                        PRICE_FEEDS['independent:' + market] -= mmConfig.slippageRate * fillQty;
+                    }
+                    console.log(PRICE_FEEDS);
+                }
+            });
+            break;
         default:
             break
     }
@@ -554,7 +584,11 @@ async function setupPriceFeeds() {
         }
         if (secondaryPriceFeed) {
           MM_CONFIG.pairs[market].priceFeedSecondary = secondaryPriceFeed.toLowerCase();
+            
+          // independent price feeds can only be primary price Feeds
+          if (secondaryPriceFeed.includes('independent')) throw new Error('Independent price feeds cannot be used as secondary price feeds');
         }
+
         [primaryPriceFeed, secondaryPriceFeed].forEach(priceFeed => {
             if(!priceFeed) { return; }
             const [provider, id] = priceFeed.split(':');
@@ -570,6 +604,11 @@ async function setupPriceFeeds() {
                     break;
                 case 'constant':
                     PRICE_FEEDS['constant:'+id] = parseFloat(id);
+                    break;
+                // init price for independent price feed is set in config
+                case 'independent':
+                    PRICE_FEEDS['independent:'+market] = parseFloat(id);
+                    MM_CONFIG.pairs[market].priceFeedPrimary = 'independent:' + market;
                     break;
                 default:
                     throw new Error("Price feed provider "+provider+" is not available.")
