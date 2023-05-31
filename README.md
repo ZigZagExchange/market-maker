@@ -44,7 +44,7 @@ node marketmaker.js
 
 ## Configuration Via Environment Variables
 
-It is __recommended__ to use environment variables to set your private keys. You can set `ETH_PRIVKEY`, `CRYPTOWATCH_API_KEY` and `INFURA` using them. You can set them using `ETH_PRIVKEY=0x____`. For more informations on private keys read [this](https://linuxize.com/post/how-to-set-and-list-environment-variables-in-linux/).
+It is __recommended__ to use environment variables to set your private keys. You can set `ETH_PRIVKEY`, `CRYPTOWATCH_API_KEY` and `RPC` using them. You can set them using `ETH_PRIVKEY=0x____`. For more informations on private keys read [this](https://linuxize.com/post/how-to-set-and-list-environment-variables-in-linux/).
 
 If your hosting service requires you to pass in configs via environment variables you can compress `config.json`:
 
@@ -139,10 +139,9 @@ Example:
 ```
 
 ###### Chainlink
-With chainlink you have access to price oracles via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
+With chainlink you have access to price oracles via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an RPC provider account like quicknode, alchemy, ... (some offer free calls). You can get an endpoint for your market maker (like "https://eth.llamarpc.com"), You can add this with the `ethereumRPC` field in `config.json`, like this:
 ```
-
-"infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
+"ethereumRPC": "https://eth.llamarpc.com",
 "pairs": {
   "ETH-USDC": {
       "zigzagChainId": 1,
@@ -161,9 +160,9 @@ You can get the available market contracts [here.](https://docs.chain.link/docs/
 ```
 
 ###### UniswapV3
-With uniswapV3 you have access to price feed's via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an Infura account (100000 Requests/Day for free). You can get an endpoint for your market maker (like https://mainnet.infura.io/v3/...), You can add this with the `infuraUrl` field in `config.json`, like this:
+With uniswapV3 you have access to price feed's via blockchain. The requests are read-calls to a smart contract. The public ethers provider might be too slow for a higher number of pairs or at times of high demand. Therefore, it might be needed to have access to an RPC provider account like quicknode, alchemy, ... (some offer free calls). You can get an endpoint for your market maker (like "https://eth.llamarpc.com"), You can add this with the `ethereumRPC` field in `config.json`, like this:
 ```
-"infuraUrl": "https://mainnet.infura.io/v3/xxxxxxxx",
+"ethereumRPC": "https://eth.llamarpc.com",
 "pairs": {
   "ETH-USDC": {
       "zigzagChainId": 1,
