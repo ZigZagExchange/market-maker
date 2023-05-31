@@ -15,11 +15,13 @@ const WALLETS = {};
 const MARKETS = {};
 const CHAINLINK_PROVIDERS = {};
 const UNISWAP_V3_PROVIDERS = {};
+const UNISWAP_V3_MULTIHOP_PROVIDERS = {};
 const PAST_ORDER_LIST = {};
 const FEE_TOKEN_LIST = [];
 let FEE_TOKEN = null;
 
 let uniswap_error_counter = 0;
+let uniswap_multihop_error_counter = 0;
 let chainlink_error_counter = 0;
 
 // Load MM config
@@ -533,7 +535,10 @@ async function fillOpenOrders() {
 }
 
 async function setupPriceFeeds() {
-  const cryptowatch = [], chainlink = [], uniswapV3 = [];
+    const cryptowatch = [],
+        chainlink = [],
+        uniswapV3 = [],
+        uniswapV3Multihop = [];
     for (let market in MM_CONFIG.pairs) {
         const pairConfig = MM_CONFIG.pairs[market];
         if(!pairConfig.active) { continue; }
@@ -562,11 +567,20 @@ async function setupPriceFeeds() {
                 case 'cryptowatch':
                     if(!cryptowatch.includes(id)) { cryptowatch.push(id); }
                     break;
-                case 'chainlink':
-                    if(!chainlink.includes(id)) { chainlink.push(id); }
+                case "chainlink":
+                    if (!chainlink.includes(id)) {
+                        chainlink.push(id);
+                    }
                     break;
-                case 'uniswapv3':
-                    if(!uniswapV3.includes(id)) { uniswapV3.push(id); }
+                case "uniswapv3":
+                    if (!uniswapV3.includes(id)) {
+                        uniswapV3.push(id.toLowerCase());
+                    }
+                    break;
+                case "uniswapv3multihop":
+                    if (!uniswapV3Multihop.includes(id)) {
+                        uniswapV3Multihop.push(id.toLowerCase());
+                    }
                     break;
                 case 'constant':
                     PRICE_FEEDS['constant:'+id] = parseFloat(id);
@@ -580,6 +594,7 @@ async function setupPriceFeeds() {
   if(chainlink.length > 0) await chainlinkSetup(chainlink);
   if(cryptowatch.length > 0) await cryptowatchWsSetup(cryptowatch);
   if(uniswapV3.length > 0) await uniswapV3Setup(uniswapV3);
+  if(uniswapV3Multihop.length > 0) await uniswapV3MultihopSetup(uniswapV3Multihop);
 
   console.log(PRICE_FEEDS);
 }
@@ -673,8 +688,136 @@ async function chainlinkUpdate() {
     } catch (err) {
         chainlink_error_counter += 1;
         console.log(`Failed to update chainlink, retry: ${err.message}`);
-        if(chainlink_error_counter > 4) {
-            throw new Error ("Failed to update chainlink since 150 seconds!")
+        if (chainlink_error_counter > 4) {
+            throw new Error("Failed to update chainlink since 150 seconds!");
+        }
+    }
+}
+
+async function uniswapV3MultihopSetup(uniswapV3Address) {
+    const results = uniswapV3Address.map(async (addressesString) => {
+        try {
+            const IUniswapV3PoolABI = JSON.parse(
+                fs.readFileSync("ABIs/IUniswapV3Pool.abi")
+            );
+            const ERC20ABI = JSON.parse(fs.readFileSync("ABIs/ERC20.abi"));
+
+            const addresses = addressesString.split("-");
+            const providers = addresses.map((address) => {
+                return {
+                    pair: new ethers.Contract(
+                        address,
+                        IUniswapV3PoolABI,
+                        ethersProvider
+                    ),
+                    reverted: false,
+                };
+            });
+
+            let curToken = null;
+            // Check if any of the pairs are reverted
+            for (const provider of providers) {
+                const token0 = await provider.pair.token0();
+                const token1 = await provider.pair.token1();
+                if (curToken == null) {
+                    curToken = token1;
+                } else {
+                    if (curToken == token0) {
+                        curToken = token1;
+                    } else {
+                        if (curToken == token1) {
+                            provider.reverted = true;
+                            curToken = token0;
+                        } else {
+                            throw new Error("Tokens don't match");
+                        }
+                    }
+                }
+            }
+
+            const lastProvider = providers[providers.length - 1];
+            let [addressToken0, addressToken1] = await Promise.all([
+                providers[0].pair.token0(),
+                lastProvider.reverted ? lastProvider.pair.token0() : lastProvider.pair.token1(),
+            ]);
+
+            const tokenProvider0 = new ethers.Contract(
+                addressToken0,
+                ERC20ABI,
+                ethersProvider
+            );
+            const tokenProvider1 = new ethers.Contract(
+                addressToken1,
+                ERC20ABI,
+                ethersProvider
+            );
+
+            let [decimals0, decimals1] = await Promise.all([
+                tokenProvider0.decimals(),
+                tokenProvider1.decimals(),
+            ]);
+            const decimalsRatio = 10 ** decimals0 / 10 ** decimals1;
+
+            const key = "uniswapv3multihop:" + addressesString;
+            UNISWAP_V3_MULTIHOP_PROVIDERS[key] = [providers, decimalsRatio];
+
+            const price = await calculatePriceMultihop(
+                providers,
+                decimalsRatio
+            );
+            PRICE_FEEDS[key] = price;
+        } catch (e) {
+            throw new Error(
+                "Error while setting up uniswapV3 for " +
+                    addressesString +
+                    ", Error: " +
+                    e
+            );
+        }
+    });
+    await Promise.all(results);
+    setInterval(uniswapV3MultihopUpdate, 30000);
+}
+
+async function calculatePriceMultihop(providers, decimalsRatio) {
+    const slots = await Promise.all(
+        providers.map(async (provider) => {
+            return { slot0: await provider.pair.slot0(), reverted: provider.reverted };
+        })
+    );
+    // get inital price
+    const price = slots.reduce((price, slot) => {
+        const { reverted, slot0 } = slot;
+        const pairPrice = (slot0.sqrtPriceX96 * slot0.sqrtPriceX96);
+        const x96Adjustment = 2 ** 192;
+        const nextPrice = reverted ? price * x96Adjustment / pairPrice : price * pairPrice / x96Adjustment;
+        return nextPrice;
+    }, 1);
+    const priceAdjusted = price * decimalsRatio;
+    return priceAdjusted;
+}
+
+async function uniswapV3MultihopUpdate() {
+    try {
+        await Promise.all(
+            Object.keys(UNISWAP_V3_MULTIHOP_PROVIDERS).map(async (key) => {
+                const [providers, decimalsRatio] =
+                    UNISWAP_V3_MULTIHOP_PROVIDERS[key];
+                const newPrice = await calculatePriceMultihop(
+                    providers,
+                    decimalsRatio
+                );
+                PRICE_FEEDS[key] = newPrice;
+            })
+        );
+        // reset error counter if successful
+        uniswap_multihop_error_counter = 0;
+    } catch (err) {
+        uniswap_multihop_error_counter += 1;
+        console.log(`Failed to update uniswap, retry: ${err.message}`);
+        console.log(err.message);
+        if (uniswap_multihop_error_counter > 4) {
+            throw new Error("Failed to update uniswap since 150 seconds!");
         }
     }
 }

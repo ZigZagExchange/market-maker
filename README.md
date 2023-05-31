@@ -115,6 +115,7 @@ There are 4 modes available with a 5th on the way.
 * `chainlink` : Follows an external price oracle. Chainlink is WEB3 and might be slower then cryptowatch.
 * `constant`: Sets an fixed price and market makes around that price. Can be combined with single-sided liquidity to simulate limit orders.
 * `uniswapV3`: Reads prices on-chain from a specified uniswapV3 pool
+* `uniswapV3Multihop`: Reads prices on-chain from a specified swap-route of uniswapV3 pools
 * `independent`: Under development. The price is set independent of a price feed.
 
 **Warning:** Make sure your price feed is close to the price you see on zigzag. **Otherwise, your mm can lose money!**
@@ -176,6 +177,16 @@ You can get the available market contracts [here.](https://info.uniswap.org) Sel
     "side": "d",
     "priceFeedPrimary": "uniswapv3:0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
     "priceFeedSecondary": null,
+    ....
+}
+```
+
+###### UniswapV3Multihop
+If there is no direct uniswap pair deployed for the given token pair you can provide a path of pair addresses (separated by `-`) from which to calculate the price.
+In the below example the pair addresses for the `icETH/WETH` and `WETH/USDC` pairs are provided to calculate the `icETH-USDC` price.
+```
+"icETH-USDC": {
+    "priceFeedPrimary": "uniswapv3Multihop:0xe5d028350093a743A9769e6FD7F5546eEdDAA320-0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
     ....
 }
 ```
